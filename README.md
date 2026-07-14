@@ -60,10 +60,6 @@ Until then, use the source build above. A future tap will reduce the Homebrew fl
 
 For development, run `bun src/cli.ts ...` or `bun link` from this directory.
 
-### Migrating from smem
-
-The renamed CLI uses `smer`, `SMER_HOME`, `~/.smer`, `smer.db`, and `dev.smer.*` LaunchAgent labels. During migration it also recognizes `SMEM_HOME`, `~/.smem`, legacy `smem.db` files, existing `smem-*` Keychain services, and old shell or LaunchAgent installations. A compatibility `smem` executable may point to `smer` while downstream scripts are updated.
-
 ## First minute
 
 ```sh
