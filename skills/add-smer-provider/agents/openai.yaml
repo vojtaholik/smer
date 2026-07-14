@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add smer Provider"
+  short_description: "Add and verify a local smer data provider"
+  default_prompt: "Use $add-smer-provider to add a provider for this service."

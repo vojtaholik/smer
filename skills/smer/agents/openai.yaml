@@ -1,0 +1,4 @@
+interface:
+  display_name: "smer Work Memory"
+  short_description: "Query and analyze your private work history"
+  default_prompt: "Use $smer to find noteworthy patterns and open loops from my recent work, with event citations."

@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a focused improvement to smer.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow is difficult today, and who encounters it?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and resource impact
+      description: What data would this touch, and how should capture, storage, or network access remain bounded?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Note any existing command, provider, or workaround you tried.

@@ -1,0 +1,37 @@
+{
+  "name": "smer-cli",
+  "version": "0.1.0",
+  "description": "Private, local-first work memory for developers and coding agents",
+  "type": "module",
+  "bin": {
+    "smer": "./src/cli.ts"
+  },
+  "scripts": {
+    "build": "bun build --compile --minify --outfile dist/smer src/cli.ts",
+    "check": "bun build src/cli.ts --target=bun --outdir=/tmp/smer-check",
+    "test": "bun test",
+    "smoke": "bun test test/smoke.test.ts",
+    "benchmark": "bun test/benchmark.ts"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "keywords": [
+    "ai-agents",
+    "cli",
+    "developer-tools",
+    "local-first",
+    "sqlite",
+    "work-memory"
+  ],
+  "homepage": "https://github.com/vojtaholik/smer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vojtaholik/smer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vojtaholik/smer/issues"
+  },
+  "author": "Vojta Holik",
+  "license": "MIT"
+}

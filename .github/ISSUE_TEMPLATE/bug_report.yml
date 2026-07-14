@@ -1,0 +1,48 @@
+name: Bug report
+description: Report reproducible incorrect behavior in smer.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve smer. Remove private paths, captured content, and credentials before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: smer version
+      placeholder: Output of smer version
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: Output of sw_vers -productVersion
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest sequence of commands or synthetic fixture that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Add relevant output from smer doctor after removing private data.
+      render: shell
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed credentials, captured content, personal data, and private filesystem paths.
+          required: true

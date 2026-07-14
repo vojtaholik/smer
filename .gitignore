@@ -1,0 +1,14 @@
+.claude
+.mcp.json
+.codex
+/dist/
+.env
+.env.*
+!.env.example
+/.DS_Store
+/coverage/
+/lat.md/.cache/
+*.db
+*.db-shm
+*.db-wal
+*.log
