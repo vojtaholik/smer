@@ -4,6 +4,7 @@ import type { StoredEvent } from "./types.ts";
 
 export interface EventQuery {
   project?: string;
+  source?: string;
   kind?: string;
   since?: number;
   until?: number;
@@ -32,6 +33,10 @@ export function searchEvents(store: Store, term: string, options: EventQuery = {
   if (options.project) {
     filters.push("e.project = $project");
     params.project = options.project;
+  }
+  if (options.source) {
+    filters.push("e.source = $source");
+    params.source = options.source;
   }
   if (options.kind) {
     filters.push("e.kind = $kind");
@@ -71,6 +76,10 @@ export function recentEvents(store: Store, options: EventQuery = {}): StoredEven
   if (options.project) {
     filters.push("project = $project");
     params.project = options.project;
+  }
+  if (options.source) {
+    filters.push("source = $source");
+    params.source = options.source;
   }
   if (options.kind) {
     filters.push("kind = $kind");
@@ -115,14 +124,27 @@ export function timeline(store: Store, options: EventQuery = {}): TimelineBlock[
 export function stats(store: Store, options: EventQuery = {}): {
   total: number;
   since: number | null;
+  bySource: Array<{ source: string; count: number }>;
   byKind: Array<{ kind: string; count: number }>;
   byProject: Array<{ project: string | null; count: number; activeSeconds: number }>;
   note: string;
 } {
   const since = options.since || null;
-  const where = since ? "WHERE ts >= $since" : "";
-  const params = since ? { since } : {};
+  const filters: string[] = [];
+  const params: Record<string, string | number> = {};
+  if (since) {
+    filters.push("ts >= $since");
+    params.since = since;
+  }
+  if (options.source) {
+    filters.push("source = $source");
+    params.source = options.source;
+  }
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
   const total = store.db.query(`SELECT count(*) AS count FROM events ${where}`).get(params) as { count: number };
+  const bySource = store.db
+    .query(`SELECT source, count(*) AS count FROM events ${where} GROUP BY source ORDER BY count DESC`)
+    .all(params) as Array<{ source: string; count: number }>;
   const byKind = store.db
     .query(`SELECT kind, count(*) AS count FROM events ${where} GROUP BY kind ORDER BY count DESC`)
     .all(params) as Array<{ kind: string; count: number }>;
@@ -153,6 +175,7 @@ export function stats(store: Store, options: EventQuery = {}): {
   return {
     total: Number(total.count),
     since,
+    bySource,
     byKind,
     byProject,
     note: "Active spans are estimates from event density; smer does not capture app focus.",

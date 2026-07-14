@@ -4,7 +4,7 @@ The test suite proves corpus behavior, provider contracts, setup safety, daemon 
 
 ## Corpus Invariants
 
-Tests cover strict validation, secret and email redaction, cwd/repo/domain/keyword attribution, narrow shell dedupe, FTS retrieval, timeline grouping, stats, and transactional spool recovery.
+Tests cover strict validation, redaction, attribution, dedupe, FTS retrieval, source-scoped search and timelines, per-source stats, and transactional spool recovery.
 
 ## Provider Contracts
 

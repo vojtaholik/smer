@@ -129,15 +129,18 @@ describe("store and ingest", () => {
     const now = Math.floor(Date.now() / 1000);
     ingestEvent(store, config, event({ ts: now - 1200, title: "start deploy", text: "roomka deploy started", project: "roomka" }));
     ingestEvent(store, config, event({ ts: now - 1100, title: "deploy failed", text: "roomka edge deploy failed", project: "roomka" }));
-    ingestEvent(store, config, event({ ts: now, title: "fixed deploy", text: "roomka deploy fixed", project: "roomka" }));
+    ingestEvent(store, config, event({ ts: now, source: "claude-code", kind: "agent_session", title: "fixed deploy", text: "roomka deploy fixed", project: "roomka" }));
 
     const prepared = ingestEvent(store, config, event({ ts: now + 10, title: "spooled note", text: "sk-proj-abcdefghijklmnopqrstuvwxyz123456 spooled" }), { dryRun: true });
     spoolEvent(home, prepared.event);
     const drained = drainSpool(store, config);
     expect(drained.inserted).toBe(1);
     expect(searchEvents(store, "deploy", { project: "roomka" }).length).toBe(3);
+    expect(searchEvents(store, "deploy", { source: "claude-code" })).toHaveLength(1);
     expect(timeline(store, { since: now - 3600 }).length).toBe(2);
-    expect(stats(store, { since: now - 3600 }).total).toBe(4);
+    expect(timeline(store, { since: now - 3600, source: "claude-code" }).flatMap((block) => block.events)).toHaveLength(1);
+    expect(stats(store, { since: now - 3600, source: "claude-code" }).total).toBe(1);
+    expect(stats(store, { since: now - 3600 }).bySource).toContainEqual({ source: "claude-code", count: 1 });
     expect(store.db.query("SELECT text FROM events WHERE title='spooled note'").get()).toEqual({ text: "<redacted:api-key> spooled" });
     writeFileSync(join(home, "spool", "recover.jsonl.processing"), `${JSON.stringify(event({ ts: now + 20, title: "recovered", text: "recovered after crash" }))}\n`);
     writeFileSync(join(home, "spool", "invalid.jsonl"), "{}\n");

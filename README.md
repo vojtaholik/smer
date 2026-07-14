@@ -75,9 +75,9 @@ Running `smer` with no arguments opens the TUI. In the TUI, type an FTS5 query a
 ## Commands
 
 ```text
-smer search "query" [--project P] [--kind K] [--since 7d] [--limit 25]
-smer timeline [--day YYYY-MM-DD] [--project P] [--since 7d]
-smer stats [--since 30d]
+smer search "query" [--project P] [--source S] [--kind K] [--since 7d] [--limit 25]
+smer timeline [--day YYYY-MM-DD] [--project P] [--source S] [--kind K] [--since 7d]
+smer stats [--source S] [--since 30d]
 smer show EVENT_ID
 smer emit --source ID --kind KIND --title TEXT [--text TEXT] [--spool]
 smer pause 1h | smer resume

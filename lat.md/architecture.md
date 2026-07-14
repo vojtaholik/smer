@@ -36,7 +36,7 @@ Custom providers use declarative API polling or JSONL tails where possible. Exec
 
 ## Retrieval Surfaces
 
-The CLI command router in [[src/cli.ts#main]] exposes search, timeline, stats, setup, provider control, imports, diagnostics, and ADR-001 JSON output.
+The CLI command router in [[src/cli.ts#main]] exposes source-aware search, timeline, stats, setup, provider control, imports, diagnostics, and ADR-001 JSON output.
 
 Running the binary without a command opens [[src/tui.ts#runTui]], a full-screen terminal search interface with event detail and source deep links.
 

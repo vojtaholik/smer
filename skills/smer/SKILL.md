@@ -14,7 +14,7 @@ Use the `smer` CLI to turn captured work events into evidence-backed answers. Ne
 3. Establish breadth with one or both of:
    - `smer timeline --since RANGE --json`
    - `smer stats --since RANGE --json`
-4. Form hypotheses from that baseline, then run focused searches with `smer search "FTS5 QUERY" --since RANGE --json`. Add `--project PROJECT` or `--kind KIND` when useful.
+4. Form hypotheses from that baseline, then run focused searches with `smer search "FTS5 QUERY" --since RANGE --json`. Add `--project PROJECT`, `--source SOURCE`, or `--kind KIND` when useful.
 5. Inspect decisive evidence with `smer show EVENT_ID --json`. Do not base a strong conclusion only on a truncated search result.
 6. Synthesize the answer around the user's question. Cite substantive observed claims as `[#EVENT_ID]`, distinguish inference from observation, and state where evidence is incomplete.
 
@@ -45,7 +45,7 @@ Use `smer projects list --json` to resolve project names when needed. Build a ch
 ## Query Guidance
 
 - Use FTS5 operators such as `term1 OR term2` and quoted phrases such as `"exact phrase"`.
-- Search Slack with `--kind x-slack-message`; search coding-agent sessions with `--kind agent_session`.
+- Search Slack with `--source slack --kind x-slack-message`. Search a coding agent with `--source claude-code|codex|cursor --kind agent_session`; source names are filters, not FTS terms.
 - Use several small searches with synonyms when the user's language may differ from event text.
 - If results are empty, broaden the date range, remove filters, inspect `smer providers --json`, and report corpus gaps rather than inventing an answer.
 - Prefer chronological event IDs for a narrative and ranked event IDs for recommendations.

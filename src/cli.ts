@@ -452,9 +452,10 @@ function requiredFlag(args: ParsedArgs, key: string): string {
   return value;
 }
 
-function queryOptions(args: ParsedArgs): { project?: string; kind?: string; since?: number; until?: number; limit?: number } {
+function queryOptions(args: ParsedArgs): { project?: string; source?: string; kind?: string; since?: number; until?: number; limit?: number } {
   return {
     project: stringFlag(args, "project"),
+    source: stringFlag(args, "source"),
     kind: stringFlag(args, "kind"),
     since: parseSince(stringFlag(args, "since")),
     limit: stringFlag(args, "limit") ? Number(stringFlag(args, "limit")) : undefined,
@@ -554,7 +555,9 @@ function printTimeline(blocks: ReturnType<typeof timeline>): void {
 
 function printStats(result: ReturnType<typeof stats>): void {
   console.log(`${result.total} events\n`);
-  console.log("By kind");
+  console.log("By source");
+  for (const row of result.bySource) console.log(`  ${row.source.padEnd(22)} ${row.count}`);
+  console.log("\nBy kind");
   for (const row of result.byKind) console.log(`  ${row.kind.padEnd(22)} ${row.count}`);
   console.log("\nBy project");
   for (const row of result.byProject) console.log(`  ${(row.project || "unattributed").padEnd(22)} ${String(row.count).padStart(6)}  ~${formatDuration(row.activeSeconds)}`);
@@ -611,9 +614,9 @@ const HELP = `smer ${VERSION} - local, event-driven work memory
 Usage:
   smer                                      Open the search TUI
   smer setup [--dev-root PATH] [--install-shell]
-  smer search "FTS5 query" [--project P] [--kind K] [--since 7d]
-  smer timeline [--day YYYY-MM-DD] [--project P] [--since 7d]
-  smer stats [--since 30d]
+  smer search "FTS5 query" [--project P] [--source S] [--kind K] [--since 7d]
+  smer timeline [--day YYYY-MM-DD] [--project P] [--source S] [--kind K] [--since 7d]
+  smer stats [--source S] [--since 30d]
   smer show EVENT_ID
   smer emit --source ID --kind KIND --title TEXT [--text TEXT] [--spool]
   smer pause 1h | smer resume
