@@ -10,7 +10,7 @@ import { drainSpool, spoolEvent } from "../src/spool.ts";
 import { scanWorkspaces } from "../src/providers/workspace.ts";
 import { BUILTIN_ADAPTERS, runProvider } from "../src/providers/index.ts";
 import { pollSlack } from "../src/providers/cloud.ts";
-import { importChatGPT } from "../src/importers.ts";
+import { importChatGPT, scanChatGPTInbox } from "../src/importers.ts";
 import { setup } from "../src/setup.ts";
 import { doctor } from "../src/doctor.ts";
 import { Database } from "bun:sqlite";
@@ -172,6 +172,14 @@ describe("providers, imports, setup, and CLI", () => {
     expect(first.inserted).toBe(1);
     expect(second.duplicates).toBe(1);
     expect(searchEvents(store, "build log").length).toBe(1);
+    const inbox = join(home, "imports", "chatgpt");
+    mkdirSync(inbox, { recursive: true });
+    writeFileSync(join(inbox, "conversations.json"), readFileSync(path));
+    const inboxFirst = scanChatGPTInbox(store, defaultConfig());
+    const inboxSecond = scanChatGPTInbox(store, defaultConfig());
+    expect(inboxFirst.scanned).toBe(1);
+    expect(inboxFirst.duplicates).toBe(1);
+    expect(inboxSecond).toMatchObject({ scanned: 1, inserted: 0, duplicates: 0, warnings: [] });
     store.close();
   });
 

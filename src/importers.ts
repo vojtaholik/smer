@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { extname } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { basename, extname, join } from "node:path";
 import type { SmerConfig } from "./types.ts";
 import type { Store } from "./store.ts";
 import { contentHash, ingestEvent } from "./events.ts";
@@ -39,7 +39,8 @@ export function importChatGPT(
       .map((message) => `${message.role}: ${message.text}`)
       .join("\n\n")
       .slice(0, 64 * 1024);
-    const payloadHash = contentHash("chatgpt", id || title, text);
+    const stableId = id || contentHash("chatgpt-anonymous", title, text);
+    const payloadHash = contentHash("chatgpt", stableId);
     const result = ingestEvent(store, config, {
       ts,
       source: "chatgpt",
@@ -53,11 +54,44 @@ export function importChatGPT(
         message_count: messages.length,
         local_import: true,
       },
-    }, { contentHash: payloadHash });
+    }, { contentHash: payloadHash, upsert: true });
     if (result.duplicate) duplicates += 1;
     else inserted += 1;
   }
   return { conversations: conversations.length, inserted, duplicates, messages: messageCount };
+}
+
+export function scanChatGPTInbox(
+  store: Store,
+  config: SmerConfig,
+  root = join(store.home, "imports", "chatgpt"),
+): { provider: string; scanned: number; inserted: number; duplicates: number; warnings: string[]; cursor: string | null } {
+  const result = { provider: "chatgpt", scanned: 0, inserted: 0, duplicates: 0, warnings: [] as string[], cursor: null as string | null };
+  if (!existsSync(root)) return result;
+  let maxMtime = 0;
+  const files = readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && (entry.name === "conversations.json" || extname(entry.name).toLowerCase() === ".zip"))
+    .map((entry) => join(root, entry.name))
+    .sort();
+
+  for (const path of files) {
+    result.scanned += 1;
+    try {
+      const stats = statSync(path);
+      maxMtime = Math.max(maxMtime, Math.floor(stats.mtimeMs));
+      const signature = `${stats.size}:${Math.floor(stats.mtimeMs)}`;
+      const signatureKey = `chatgpt_import:${contentHash("chatgpt-inbox", path)}`;
+      if (store.setting(signatureKey) === signature) continue;
+      const imported = importChatGPT(store, config, path);
+      result.inserted += imported.inserted;
+      result.duplicates += imported.duplicates;
+      store.setSetting(signatureKey, signature);
+    } catch (error) {
+      result.warnings.push(`${basename(path)}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  result.cursor = maxMtime ? String(maxMtime) : null;
+  return result;
 }
 
 export function importJsonl(

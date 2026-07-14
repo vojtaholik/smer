@@ -28,6 +28,8 @@ Built-in and custom collectors share health and cursor state through [[src/provi
 
 Local collectors cover shell history, git reflogs, bounded Claude, Codex, and Cursor transcripts, Figma desktop edit markers, and copy-then-read Chromium history. Cloud collectors cover Vercel, GitHub, Inngest, fal.ai, and opt-in Slack channels using Keychain credentials.
 
+ChatGPT uses a private import inbox because its desktop cache is encrypted and smer does not call a private conversation API. The daemon polls `~/.smer/imports/chatgpt` for changed official export ZIPs or `conversations.json`; Codex remains bounded local JSONL capture.
+
 Figma polling reads recent-tab metadata from the desktop app's private `settings.json` and advances a per-file `editedAt` cursor. Events retain clean file/node links and timestamp metadata, but omit viewport state, session parameters, signed thumbnail URLs, and document contents. Missing or changed desktop state degrades to a warning because the schema is not a supported Figma API.
 
 Cursor creates one bounded event per completed session with all user requests, the final outcome, commands, file paths, tool counts, and failures. It excludes file contents and diff bodies. Slack uses channel allowlists and independent timestamp cursors.

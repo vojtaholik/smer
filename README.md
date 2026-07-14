@@ -31,7 +31,7 @@ smer turns logs your tools already produce into one private, structured timeline
 - Copy-then-read Arc, Chrome, and Chromium history harvesting with domain denylists.
 - Workspace discovery from git, package manifests, Vercel, and Wrangler metadata. `.env` bytes after `=` are discarded; only key names are retained for redaction and provider suggestions.
 - Vercel, GitHub, Inngest, fal.ai, and Slack polling with credentials held in macOS Keychain.
-- Idempotent ChatGPT export import from `conversations.json` or the official export zip.
+- Idempotent ChatGPT export import from `conversations.json` or the official export zip, with an optional daemon-polled private inbox.
 - Declarative custom API and JSONL providers, plus a supervised executable escape hatch.
 - Full-screen terminal search, timeline, stats, an ambient prompt segment, and ADR-001 JSON output.
 - Pause/resume gap markers, launchd daemon setup, diagnostics, and agent commands for digest, mining, retro, and provider creation.
@@ -103,6 +103,22 @@ Every command accepts `--home PATH` and `--json`. JSON responses use:
   "next_actions": []
 }
 ```
+
+## ChatGPT and Codex
+
+Codex capture is automatic from bounded reads of local `~/.codex` session logs. ChatGPT does not expose a supported local conversation log or read-only API; its desktop cache is encrypted, so smer only consumes official data exports.
+
+Enable the private import inbox once, then place an official export zip or extracted `conversations.json` at its top level:
+
+```sh
+smer providers enable chatgpt
+cp ~/Downloads/chatgpt-export.zip ~/.smer/imports/chatgpt/
+smer providers run chatgpt
+smer stats --source chatgpt --since 90d
+smer stats --source codex --since 90d
+```
+
+The daemon checks the inbox every ten minutes and only reprocesses a file when its size or modification time changes. Conversation ids are upserted, so a newer export updates existing ChatGPT sessions instead of multiplying snapshots. No ChatGPT or Codex token is required.
 
 ## Event contract
 

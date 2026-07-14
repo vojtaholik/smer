@@ -14,7 +14,7 @@ Coverage includes workspace discovery, `.env` key names, shell and git history, 
 
 ## Import And Setup
 
-ChatGPT imports are content-hash idempotent, while setup installs agent prompts and project metadata without touching launchd or zsh when explicitly opted out.
+ChatGPT conversation ids upsert across manual and inbox imports, and unchanged inbox files are skipped. Setup installs agent prompts and project metadata without touching launchd or zsh when explicitly opted out.
 
 Legacy database fixtures verify that a renamed binary opens `smem.db` rather than silently creating an empty `smer.db`. LaunchAgent and shell compatibility remain bounded migration behavior.
 

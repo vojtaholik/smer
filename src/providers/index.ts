@@ -5,6 +5,7 @@ import { loadCustomProviders, runCustomProvider } from "./custom.ts";
 import { scanFigma } from "./figma.ts";
 import { scanWorkspaces } from "./workspace.ts";
 import { scanBrowsers, scanClaude, scanCodex, scanCursor, scanGit, type ProviderRunResult } from "./local.ts";
+import { scanChatGPTInbox } from "../importers.ts";
 
 export const BUILTIN_ADAPTERS: Record<string, string> = {
   workspace: "fs-scan",
@@ -14,7 +15,7 @@ export const BUILTIN_ADAPTERS: Record<string, string> = {
   codex: "log-tail",
   cursor: "log-tail",
   figma: "json-poll",
-  chatgpt: "import",
+  chatgpt: "import-inbox",
   browser: "sqlite-tail",
   vercel: "api-poll",
   github: "api-poll",
@@ -70,11 +71,12 @@ export async function runProvider(
     else if (id === "claude-code") result = scanClaude(store, config);
     else if (id === "codex") result = scanCodex(store, config);
     else if (id === "cursor") result = scanCursor(store, config);
+    else if (id === "chatgpt") result = scanChatGPTInbox(store, config);
     else if (id === "figma") result = scanFigma(store, config);
     else if (id === "browser") result = scanBrowsers(store, config);
     else if (["vercel", "github", "inngest", "fal", "slack"].includes(id)) {
       result = await pollCloudProvider(id as "vercel" | "github" | "inngest" | "fal" | "slack", store, config);
-    } else if (id === "shell" || id === "chatgpt") {
+    } else if (id === "shell") {
       result = { provider: id, scanned: 0, inserted: 0, duplicates: 0, warnings: [`${id} is event/import driven`] };
     } else {
       const provider = loadCustomProviders(store.home).find((item) => item.id === id);
@@ -116,7 +118,7 @@ export async function runDueProviders(store: Store, config: SmerConfig): Promise
   const custom = loadCustomProviders(store.home);
   const results: ProviderRunResult[] = [];
   for (const status of listProviders(store, config)) {
-    if (!status.enabled || ["shell", "chatgpt"].includes(status.id)) continue;
+    if (!status.enabled || status.id === "shell") continue;
     const interval = custom.find((provider) => provider.id === status.id)?.interval || config.providerIntervals[status.id] || 600;
     if (status.lastRun && now - status.lastRun < interval) continue;
     try {

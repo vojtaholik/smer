@@ -45,6 +45,7 @@ export function defaultConfig(): SmerConfig {
       "claude-code": 60,
       codex: 60,
       cursor: 60,
+      chatgpt: 600,
       figma: 60,
       browser: 60,
       vercel: 600,
@@ -68,7 +69,7 @@ export function ensurePrivateDir(path: string): void {
 
 export function ensureLayout(home: string): void {
   ensurePrivateDir(home);
-  for (const dir of ["spool", "spool/rejected", "providers", "commands", "digests", "cache", "run"]) {
+  for (const dir of ["spool", "spool/rejected", "providers", "commands", "digests", "imports/chatgpt", "cache", "run"]) {
     ensurePrivateDir(join(home, dir));
   }
 }
