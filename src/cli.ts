@@ -17,11 +17,16 @@ import {
   installAgentFiles,
   installDigestAutomation,
   removeDigestAutomation,
+  installPulseAutomation,
+  removePulseAutomation,
+  pulseAutomationStatus,
   shellHookSnippet,
 } from "./setup.ts";
+import { runPulse, runWatch } from "./monitor.ts";
 import { importChatGPT, importJsonl } from "./importers.ts";
 import { importZshHistory, scanBrowsers, scanClaude, scanCodex, scanCursor, scanGit } from "./providers/local.ts";
 import { scanFigma } from "./providers/figma.ts";
+import { scanAssets } from "./providers/assets.ts";
 import { scanWorkspaces } from "./providers/workspace.ts";
 import { BUILTIN_ADAPTERS, listProviders, runProvider } from "./providers/index.ts";
 import { loadCustomProviders } from "./providers/custom.ts";
@@ -38,6 +43,7 @@ const BOOLEAN_FLAGS = new Set([
   "no-launchd",
   "no-backfill",
   "token-stdin",
+  "notify",
 ]);
 
 interface ParsedArgs {
@@ -165,6 +171,15 @@ async function main(): Promise<void> {
         respond(ctx, "show", event, () => printEventDetail(event));
         break;
       }
+      case "watch": {
+        if (ctx.json) throw new Error("smer watch does not support --json; use smer timeline --json for a snapshot");
+        await runWatch(store, config, {
+          ...queryOptions(args),
+          since: parseSince(stringFlag(args, "since") || "5m"),
+          intervalMs: stringFlag(args, "interval") ? parseWatchInterval(stringFlag(args, "interval")!) : undefined,
+        });
+        break;
+      }
       case "pause": {
         const duration = args.positionals[0] || "1h";
         const until = Math.floor(Date.now() / 1000) + parseDuration(duration);
@@ -230,6 +245,7 @@ async function main(): Promise<void> {
         if (["all", "codex"].includes(provider)) results.push(scanCodex(store, config));
         if (["all", "cursor"].includes(provider)) results.push(scanCursor(store, config, since));
         if (["all", "figma"].includes(provider)) results.push(scanFigma(store, config, undefined, since));
+        if (["all", "assets"].includes(provider)) results.push(scanAssets(store, config, since));
         if (["all", "browser"].includes(provider)) results.push(scanBrowsers(store, config));
         if (!results.length) throw new Error(`Unknown backfill provider: ${provider}`);
         respond(ctx, "backfill", results, () => console.log(JSON.stringify(results, null, 2)), ["Run smer timeline"]);
@@ -256,7 +272,20 @@ async function main(): Promise<void> {
       case "automation": {
         const target = args.positionals.shift();
         const action = args.positionals.shift() || "status";
-        if (target !== "digest") throw new Error("Usage: smer automation digest [enable|disable|status]");
+        if (target === "pulse") {
+          if (action === "enable") {
+            const result = installPulseAutomation(store.home, stringFlag(args, "every") || "5m");
+            respond(ctx, "automation pulse enable", result, () => console.log(`conditional pulse scheduled every ${result.every}`));
+          } else if (action === "disable") {
+            const result = removePulseAutomation();
+            respond(ctx, "automation pulse disable", result, () => console.log(result.removed ? "pulse automation removed" : "pulse automation was not installed"));
+          } else if (action === "status") {
+            const result = pulseAutomationStatus();
+            respond(ctx, "automation pulse status", result, () => console.log(result.installed ? `pulse installed at ${result.path}` : "pulse automation is not installed"));
+          } else throw new Error("Usage: smer automation pulse [enable --every 5m|disable|status]");
+          break;
+        }
+        if (target !== "digest") throw new Error("Usage: smer automation [digest|pulse] [enable|disable|status]");
         if (action === "enable") {
           const result = installDigestAutomation(store.home, stringFlag(args, "at") || "18:00", stringFlag(args, "agent-path"));
           respond(ctx, "automation digest enable", result, () => console.log(`daily digest scheduled for ${result.time}`));
@@ -267,6 +296,11 @@ async function main(): Promise<void> {
           const result = digestAutomationStatus();
           respond(ctx, "automation digest status", result, () => console.log(result.installed ? `daily digest installed at ${result.path}` : "daily digest automation is not installed"));
         } else throw new Error("Usage: smer automation digest [enable|disable|status]");
+        break;
+      }
+      case "pulse": {
+        const result = runPulse(store, config, { notify: boolFlag(args, "notify") });
+        respond(ctx, "pulse", result, () => console.log(result.notify ? result.message : "No notable activity or health issues."));
         break;
       }
       case "daemon": {
@@ -475,6 +509,12 @@ function parseDuration(value: string): number {
   return Number(match[1]) * { m: 60, h: 3600, d: 86400 }[match[2] as "m" | "h" | "d"];
 }
 
+function parseWatchInterval(value: string): number {
+  const match = value.match(/^(\d+)(ms|s)$/);
+  if (!match) throw new Error("Watch interval must use milliseconds or seconds, such as 500ms or 2s");
+  return Number(match[1]) * (match[2] === "s" ? 1000 : 1);
+}
+
 function gapEvent(title: string, meta: Record<string, unknown>): EventEnvelope {
   return {
     ts: Math.floor(Date.now() / 1000),
@@ -618,17 +658,20 @@ Usage:
   smer timeline [--day YYYY-MM-DD] [--project P] [--source S] [--kind K] [--since 7d]
   smer stats [--source S] [--since 30d]
   smer show EVENT_ID
+  smer watch [--since 5m] [--interval 1s] [--project P] [--source S] [--kind K]
   smer emit --source ID --kind KIND --title TEXT [--text TEXT] [--spool]
   smer pause 1h | smer resume
   smer providers [list|run ID|enable ID|disable ID|add ID]
   smer workspace scan [ROOT]
   smer projects [list|map NAME --path PATH --domain DOMAIN --keyword WORD]
-  smer backfill [all|shell|git|claude-code|codex|cursor|figma|browser]
+  smer backfill [all|shell|git|claude-code|codex|cursor|figma|assets|browser]
   smer import chatgpt EXPORT.zip
   smer import jsonl EVENTS.jsonl
   smer doctor
   smer daemon
   smer automation digest [enable --at 18:00|disable|status]
+  smer automation pulse [enable --every 5m|disable|status]
+  smer pulse [--notify]
   smer status --segment
 
 Global options:

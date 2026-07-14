@@ -6,6 +6,7 @@ import { scanFigma } from "./figma.ts";
 import { scanWorkspaces } from "./workspace.ts";
 import { scanBrowsers, scanClaude, scanCodex, scanCursor, scanGit, type ProviderRunResult } from "./local.ts";
 import { scanChatGPTInbox } from "../importers.ts";
+import { scanAssets } from "./assets.ts";
 
 export const BUILTIN_ADAPTERS: Record<string, string> = {
   workspace: "fs-scan",
@@ -15,6 +16,7 @@ export const BUILTIN_ADAPTERS: Record<string, string> = {
   codex: "log-tail",
   cursor: "log-tail",
   figma: "json-poll",
+  assets: "fs-scan",
   chatgpt: "import-inbox",
   browser: "sqlite-tail",
   vercel: "api-poll",
@@ -73,6 +75,7 @@ export async function runProvider(
     else if (id === "cursor") result = scanCursor(store, config, options.since);
     else if (id === "chatgpt") result = scanChatGPTInbox(store, config);
     else if (id === "figma") result = scanFigma(store, config);
+    else if (id === "assets") result = scanAssets(store, config, options.since);
     else if (id === "browser") result = scanBrowsers(store, config);
     else if (["vercel", "github", "inngest", "fal", "slack"].includes(id)) {
       result = await pollCloudProvider(id as "vercel" | "github" | "inngest" | "fal" | "slack", store, config);

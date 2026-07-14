@@ -8,6 +8,7 @@ import { AGENT_COMMANDS, CLAUDE_MD } from "./prompts.ts";
 import { scanWorkspaces } from "./providers/workspace.ts";
 import { importZshHistory, scanBrowsers, scanClaude, scanCodex, scanCursor, scanGit } from "./providers/local.ts";
 import { scanFigma } from "./providers/figma.ts";
+import { scanAssets } from "./providers/assets.ts";
 
 const HOOK_MARKER = "# smer shell hook";
 const LEGACY_HOOK_MARKER = "# smem shell hook";
@@ -56,6 +57,7 @@ export async function setup(
       scanCodex(store, config),
       scanCursor(store, config),
       scanFigma(store, config),
+      scanAssets(store, config),
       scanBrowsers(store, config),
     ];
     const adapters: Record<string, string> = {
@@ -65,6 +67,7 @@ export async function setup(
       codex: "log-tail",
       cursor: "log-tail",
       figma: "json-poll",
+      assets: "fs-scan",
       browser: "sqlite-tail",
     };
     for (const run of runs) {
@@ -241,10 +244,64 @@ export function digestAutomationStatus(): { installed: boolean; path: string } {
     : { installed: existsSync(legacyPath), path: existsSync(legacyPath) ? legacyPath : path };
 }
 
+export function installPulseAutomation(home: string, every = "5m"): { path: string; every: string; seconds: number } {
+  const seconds = parseAutomationInterval(every);
+  const label = "dev.smer.pulse";
+  const launchAgents = join(homedir(), "Library", "LaunchAgents");
+  mkdirSync(launchAgents, { recursive: true });
+  const path = join(launchAgents, `${label}.plist`);
+  const args = [...cliArguments(), "pulse", "--notify", "--quiet"];
+  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>${label}</string>
+  <key>ProgramArguments</key><array>${args.map((arg) => `<string>${escapeXml(arg)}</string>`).join("")}</array>
+  <key>EnvironmentVariables</key><dict><key>SMER_HOME</key><string>${escapeXml(home)}</string></dict>
+  <key>StartInterval</key><integer>${seconds}</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+  <key>StandardOutPath</key><string>${escapeXml(join(home, "run", "pulse.log"))}</string>
+  <key>StandardErrorPath</key><string>${escapeXml(join(home, "run", "pulse.error.log"))}</string>
+</dict></plist>\n`;
+  writeFileSync(path, plist, { mode: 0o600 });
+  chmodSync(path, 0o600);
+  const domain = `gui/${process.getuid?.() || 501}`;
+  Bun.spawnSync(["launchctl", "bootout", domain, path], { stdout: "ignore", stderr: "ignore" });
+  const loaded = Bun.spawnSync(["launchctl", "bootstrap", domain, path], { stdout: "ignore", stderr: "pipe" });
+  if (loaded.exitCode !== 0) throw new Error(`Pulse LaunchAgent install failed: ${loaded.stderr.toString().trim()}`);
+  return { path, every, seconds };
+}
+
+export function removePulseAutomation(): { removed: boolean; path: string } {
+  const path = join(homedir(), "Library", "LaunchAgents", "dev.smer.pulse.plist");
+  const domain = `gui/${process.getuid?.() || 501}`;
+  if (!existsSync(path)) return { removed: false, path };
+  Bun.spawnSync(["launchctl", "bootout", domain, path], { stdout: "ignore", stderr: "ignore" });
+  unlinkSync(path);
+  return { removed: true, path };
+}
+
+export function pulseAutomationStatus(): { installed: boolean; path: string } {
+  const path = join(homedir(), "Library", "LaunchAgents", "dev.smer.pulse.plist");
+  return { installed: existsSync(path), path };
+}
+
 function daemonArguments(): string[] {
+  return [...cliArguments(), "daemon"];
+}
+
+function cliArguments(): string[] {
   const executable = process.execPath;
-  if (basename(executable).startsWith("bun") && import.meta.path) return [executable, import.meta.path.replace(/setup\.ts$/, "cli.ts"), "daemon"];
-  return [executable, "daemon"];
+  if (basename(executable).startsWith("bun") && import.meta.path) return [executable, import.meta.path.replace(/setup\.ts$/, "cli.ts")];
+  return [executable];
+}
+
+function parseAutomationInterval(value: string): number {
+  const match = value.match(/^(\d+)(m|h)$/);
+  if (!match) throw new Error("Pulse interval must use a value like 5m or 1h");
+  const seconds = Number(match[1]) * (match[2] === "h" ? 3600 : 60);
+  if (seconds < 300) throw new Error("Pulse interval must be at least 5m");
+  return seconds;
 }
 
 function escapeXml(value: string): string {

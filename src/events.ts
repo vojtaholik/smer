@@ -105,6 +105,8 @@ const STRUCTURAL_META_FIELDS = new Set([
   "repo",
   "jsonl_path",
   "history_path",
+  "path",
+  "relative_path",
   "files",
   "changed_files",
   "consulted_files",
@@ -179,8 +181,14 @@ export function resolveProject(event: EventEnvelope, projects: ProjectRecord[]):
     }
   }
 
-  const haystack = `${event.title} ${event.text}`.toLowerCase();
-  return projects.find((project) => project.keywords.some((keyword) => haystack.includes(keyword.toLowerCase())))?.name || null;
+  const haystack = `${event.title} ${event.text} ${cwd || ""}`.toLowerCase();
+  return projects.find((project) => project.keywords.some((keyword) => containsKeyword(haystack, keyword)))?.name || null;
+}
+
+function containsKeyword(haystack: string, keyword: string): boolean {
+  const normalized = keyword.trim().toLowerCase();
+  if (!normalized) return false;
+  return new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalized)}([^a-z0-9]|$)`, "i").test(haystack);
 }
 
 function normalizeRepo(value: string): string {

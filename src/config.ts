@@ -21,6 +21,7 @@ export const DEFAULT_PROVIDERS = [
   "codex",
   "cursor",
   "figma",
+  "assets",
   "browser",
 ];
 
@@ -47,6 +48,7 @@ export function defaultConfig(): SmerConfig {
       cursor: 60,
       chatgpt: 600,
       figma: 60,
+      assets: 60,
       browser: 60,
       vercel: 600,
       github: 600,

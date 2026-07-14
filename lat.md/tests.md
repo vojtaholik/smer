@@ -12,6 +12,10 @@ Provider fixtures cover incremental, bounded, and failure-isolated ingestion acr
 
 Coverage includes workspace discovery, `.env` key names, shell and git history, bounded agent logs, content-free Cursor save metadata, Figma edit markers, browser and Slack cursors, API pagination, JSONL tails, and executable failure shutdown.
 
+### Local Asset Saves
+
+Image save events retain filesystem metadata and project attribution while excluding image bytes from the event corpus, and repeated scans deduplicate an unchanged file version.
+
 ## Import And Setup
 
 ChatGPT conversation ids upsert across manual and inbox imports, and unchanged inbox files are skipped. Setup installs agent prompts and project metadata without touching launchd or zsh when explicitly opted out.
@@ -21,6 +25,14 @@ Legacy database fixtures verify that a renamed binary opens `smem.db` rather tha
 ## Runtime Contract
 
 A sibling-process test starts the daemon, emits through the spool, retrieves through FTS, and requires completion within the five-second latency budget.
+
+### Conditional Pulse
+
+The pulse ignores ambient browser and successful shell activity, summarizes notable work, and advances its durable window so subsequent runs do not repeat events.
+
+### Conditional Pulse Health
+
+The pulse reports stale daemon heartbeats and unhealthy enabled providers even when no notable events occurred during its current window.
 
 ## Performance Gate
 

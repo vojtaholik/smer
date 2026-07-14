@@ -17,6 +17,8 @@ import { doctor } from "../src/doctor.ts";
 import { Database } from "bun:sqlite";
 import { scanAgentLogs, scanBrowsers, scanCursor, scanGit, importZshHistory } from "../src/providers/local.ts";
 import { scanFigma } from "../src/providers/figma.ts";
+import { evaluatePulse, runPulse } from "../src/monitor.ts";
+import { scanAssets } from "../src/providers/assets.ts";
 
 const homes: string[] = [];
 const projectRoot = join(import.meta.dir, "..");
@@ -372,10 +374,11 @@ describe("providers, imports, setup, and CLI", () => {
     }
   });
 
-  test("lists Cursor, Figma, and Slack as built-in providers", () => {
-    expect(BUILTIN_ADAPTERS).toMatchObject({ cursor: "log-tail", figma: "json-poll", slack: "api-poll" });
+  test("lists Cursor, Figma, assets, and Slack as built-in providers", () => {
+    expect(BUILTIN_ADAPTERS).toMatchObject({ cursor: "log-tail", figma: "json-poll", assets: "fs-scan", slack: "api-poll" });
     expect(defaultConfig().enabledProviders).toContain("cursor");
     expect(defaultConfig().enabledProviders).toContain("figma");
+    expect(defaultConfig().enabledProviders).toContain("assets");
     expect(defaultConfig().enabledProviders).not.toContain("slack");
   });
 
@@ -449,6 +452,30 @@ describe("providers, imports, setup, and CLI", () => {
     store.close();
   });
 
+  // @lat: [[tests#Provider Contracts#Local Asset Saves]]
+  test("captures image save metadata without reading image content", () => {
+    const home = tempHome();
+    const project = join(home, "Developer", "badass.dev");
+    mkdirSync(project, { recursive: true });
+    const image = join(project, "hero-export@2x.png");
+    writeFileSync(image, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X1nKAAAAAElFTkSuQmCC", "base64"));
+    const now = Math.floor(Date.now() / 1000);
+    const store = new Store(home);
+    store.upsertProject({ name: "false-positive", path: join(home, "unrelated", "very-long-project-path"), domains: [], keywords: ["eve"] });
+    store.upsertProject({ name: "asset-project", path: join(home, "unrelated"), domains: [], keywords: ["badass"] });
+    const config = { ...defaultConfig(), devRoots: [home] };
+    const first = scanAssets(store, config, now - 60, [image]);
+    const second = scanAssets(store, config, now - 60, [image]);
+    expect(first).toMatchObject({ scanned: 1, inserted: 1 });
+    expect(second).toMatchObject({ scanned: 1, duplicates: 1 });
+    const saved = searchEvents(store, '"hero-export"')[0];
+    expect(saved).toMatchObject({ source: "assets", kind: "x-asset-save", project: "asset-project" });
+    expect(saved?.meta).toMatchObject({ path: image, extension: ".png", content_captured: false, activity_basis: "filesystem-mtime" });
+    expect(saved?.title).toContain("hero-export at 2x.png");
+    expect(saved?.text).not.toContain("iVBOR");
+    store.close();
+  });
+
   test("backfills shell history and git reflog with project evidence", () => {
     const home = tempHome();
     const history = join(home, ".zsh_history");
@@ -482,6 +509,42 @@ describe("providers, imports, setup, and CLI", () => {
     expect(store.providerState("workspace")).toMatchObject({ adapter: "fs-scan", healthy: true });
     const health = doctor(store, loadConfig(home));
     expect(health.healthy).toBe(true);
+    store.close();
+  });
+
+  // @lat: [[tests#Runtime Contract#Conditional Pulse]]
+  test("pulse suppresses ambient events and advances its reporting window", () => {
+    const home = tempHome();
+    const store = new Store(home);
+    const config = { ...defaultConfig(), enabledProviders: ["shell", "git", "browser"] };
+    const now = Math.floor(Date.now() / 1000);
+    store.setSetting("daemon_heartbeat", String(now));
+    ingestEvent(store, config, event({ ts: now - 30, source: "browser", kind: "browser_visit", title: "Docs", text: "Docs" }));
+    ingestEvent(store, config, event({ ts: now - 20, source: "shell", kind: "shell_cmd", title: "bun test", text: "bun test", meta: { exit_code: 0 } }));
+    ingestEvent(store, config, event({ ts: now - 10, source: "git", kind: "git_commit", project: "smer", title: "Add pulse", text: "Add pulse" }));
+
+    const first = runPulse(store, config, { now });
+    expect(first).toMatchObject({ notify: true, eventCount: 3, notableCount: 1, healthIssues: [] });
+    expect(first.message).toContain("1 commit in smer");
+
+    store.setSetting("daemon_heartbeat", String(now + 300));
+    const second = runPulse(store, config, { now: now + 300 });
+    expect(second).toMatchObject({ notify: false, eventCount: 0, notableCount: 0, healthIssues: [] });
+    store.close();
+  });
+
+  // @lat: [[tests#Runtime Contract#Conditional Pulse Health]]
+  test("pulse reports stale daemon and unhealthy providers without events", () => {
+    const home = tempHome();
+    const store = new Store(home);
+    const config = { ...defaultConfig(), enabledProviders: ["git"] };
+    const now = Math.floor(Date.now() / 1000);
+    store.setSetting("daemon_heartbeat", String(now - 600));
+    store.setProviderState({ id: "git", adapter: "log-tail", enabled: true, healthy: false, lastRun: now - 60, cursor: null, error: "fixture failure" });
+    const result = evaluatePulse(store, config, now);
+    expect(result.notify).toBe(true);
+    expect(result.healthIssues).toEqual(["daemon heartbeat is 10m old", "providers unhealthy: git"]);
+    expect(result.title).toBe("smer needs attention");
     store.close();
   });
 

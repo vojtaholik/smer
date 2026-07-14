@@ -14,7 +14,7 @@ Every event follows validation, redaction, project resolution, narrow source-awa
 
 Redaction runs before database insertion. Workspace discovery retains `.env` key names while discarding bytes after `=`, allowing adjacent values to be redacted without retaining credentials.
 
-Project attribution checks an explicit project, cwd prefix, repository remote, domain, and finally configured keywords. Retry and failure events survive dedupe outside deliberately tiny windows.
+Project attribution checks an explicit project, cwd prefix, repository remote, domain, and finally bounded configured keywords. Retry and failure events survive dedupe outside deliberately tiny windows.
 
 ## Capture Runtime
 
@@ -26,11 +26,13 @@ External emitters use [[src/spool.ts#spoolEvent]] so validated events reach disk
 
 Built-in and custom collectors share health and cursor state through [[src/providers/index.ts#runProvider]]. One provider failure never stops unrelated capture.
 
-Local collectors cover shell history, git reflogs, bounded Claude, Codex, and Cursor transcripts, Figma desktop edit markers, and copy-then-read Chromium history. Cloud collectors cover Vercel, GitHub, Inngest, fal.ai, and opt-in Slack channels using Keychain credentials.
+Local collectors cover shell history, git reflogs, bounded agent transcripts, Figma edit markers, saved asset metadata, and copy-then-read Chromium history. Cloud collectors use Keychain credentials.
 
 ChatGPT uses a private import inbox because its desktop cache is encrypted and smer does not call a private conversation API. The daemon polls `~/.smer/imports/chatgpt` for changed official export ZIPs or `conversations.json`; Codex remains bounded local JSONL capture.
 
 Figma polling reads recent-tab metadata from the desktop app's private `settings.json` and advances a per-file `editedAt` cursor. Events retain clean file/node links and timestamp metadata, but omit viewport state, session parameters, signed thumbnail URLs, and document contents. Missing or changed desktop state degrades to a warning because the schema is not a supported Figma API.
+
+Asset polling uses filesystem metadata search under configured development roots. It records image paths, modification times, dimensions, sizes, and project attribution without storing image bytes, OCR, thumbnails, or visual embeddings.
 
 Cursor creates one bounded event per completed Agent session and one lightweight event per saved project file found in its local-history indexes. Save events retain path and timestamp metadata but never read snapshot contents or diff bodies. Slack uses channel allowlists and independent timestamp cursors.
 
@@ -41,6 +43,8 @@ Custom providers use declarative API polling or JSONL tails where possible. Exec
 The CLI command router in [[src/cli.ts#main]] exposes source-aware search, timeline, stats, setup, provider control, imports, diagnostics, and ADR-001 JSON output.
 
 Running the binary without a command opens [[src/tui.ts#runTui]], a full-screen terminal search interface with event detail and source deep links.
+
+`smer watch` opens a live terminal feed with daemon and provider health. The conditional pulse reports non-ambient events or health failures and persists its last window to avoid duplicate notifications.
 
 ## Agent Layer
 

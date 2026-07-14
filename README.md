@@ -28,6 +28,7 @@ smer turns logs your tools already produce into one private, structured timeline
 - Shell capture with exit code and duration; zsh history and git reflog backfill.
 - Bounded Claude Code, Codex, and Cursor transcript harvesters, plus content-free Cursor save metadata from local history.
 - Figma desktop activity capture from recent document edit markers, with clean file/node deep links and no document contents.
+- Local image-save metadata from development roots, including path, size, dimensions, and project attribution without image contents.
 - Copy-then-read Arc, Chrome, and Chromium history harvesting with domain denylists.
 - Workspace discovery from git, package manifests, Vercel, and Wrangler metadata. `.env` bytes after `=` are discarded; only key names are retained for redaction and provider suggestions.
 - Vercel, GitHub, Inngest, fal.ai, and Slack polling with credentials held in macOS Keychain.
@@ -72,6 +73,8 @@ smer
 
 Running `smer` with no arguments opens the TUI. In the TUI, type an FTS5 query and press Enter, use arrow keys to navigate, and press Ctrl-O to open a URL or source file.
 
+Run `smer watch` for a live five-minute event feed with daemon and provider health. Use `--since`, `--project`, `--source`, or `--kind` to narrow the view; press `q` or Ctrl-C to exit.
+
 ## Commands
 
 ```text
@@ -79,6 +82,7 @@ smer search "query" [--project P] [--source S] [--kind K] [--since 7d] [--limit 
 smer timeline [--day YYYY-MM-DD] [--project P] [--source S] [--kind K] [--since 7d]
 smer stats [--source S] [--since 30d]
 smer show EVENT_ID
+smer watch [--since 5m] [--interval 1s] [--project P] [--source S] [--kind K]
 smer emit --source ID --kind KIND --title TEXT [--text TEXT] [--spool]
 smer pause 1h | smer resume
 smer providers [list|run ID|enable ID|disable ID|add ID|credential ID]
@@ -91,6 +95,7 @@ smer status --segment
 smer doctor
 smer daemon
 smer automation digest enable --at 18:00
+smer automation pulse enable --every 5m
 ```
 
 Every command accepts `--home PATH` and `--json`. JSON responses use:
@@ -170,6 +175,8 @@ Cursor is enabled by default and reads completed `.jsonl` or `.txt` transcripts 
 
 Figma is enabled by default on macOS and polls `~/Library/Application Support/Figma/settings.json` once per minute. It emits an `x-figma-file` event when a recent document's desktop `editedAt` marker advances. Events include the title, editor type, clean file/node link, and activity timestamps; transient viewport/session parameters, signed thumbnail URLs, and design contents are never stored. Because this is a private desktop schema rather than a supported Figma API, schema changes produce a provider warning instead of stopping the daemon. The marker can reflect document activity rather than a confirmed autosave by the current user.
 
+Assets are enabled by default and poll configured development roots once per minute. New or modified PNG, JPEG, WebP, GIF, AVIF, HEIC, and SVG files emit `x-asset-save` events containing filesystem metadata and project attribution. Image bytes, OCR, thumbnails, and visual embeddings are never stored. On macOS the collector uses Spotlight metadata search to avoid recursively walking every project each minute.
+
 Slack is opt-in. Create a single-workspace Slack app with a read-only bot token and grant `channels:read`, `groups:read`, `channels:history`, and `groups:history`; invite it only to channels smer should capture. Use `--channels` for an additional comma-separated allowlist. The initial run imports 30 days, then stores an independent timestamp cursor per channel. Add `--history-days N`, `--types public_channel,private_channel`, or `--team-id ID` when configuring the provider if needed.
 
 ## Custom providers
@@ -227,6 +234,15 @@ smer automation digest status
 ```
 
 Disable it with `smer automation digest disable`. The generated digest stays in `~/.smer/digests/YYYY-MM-DD.md`; the automation shows a local notification but never publishes.
+
+For a quieter near-real-time signal, enable the conditional pulse:
+
+```sh
+smer automation pulse enable --every 5m
+smer automation pulse status
+```
+
+The pulse does not call an AI model. It ignores browser visits and successful shell commands, summarizes notable activity such as commits, agent sessions, edits, Figma updates, and deploys, and always reports stale daemon or unhealthy provider state. Empty healthy windows stay silent. Disable it with `smer automation pulse disable`.
 
 This boundary is deliberate: smer captures and structures; the user's agent does the thinking. Publishing remains human-approved.
 
