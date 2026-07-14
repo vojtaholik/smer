@@ -70,7 +70,7 @@ export async function runProvider(
     } else if (id === "git") result = scanGit(store, config, options.since);
     else if (id === "claude-code") result = scanClaude(store, config);
     else if (id === "codex") result = scanCodex(store, config);
-    else if (id === "cursor") result = scanCursor(store, config);
+    else if (id === "cursor") result = scanCursor(store, config, options.since);
     else if (id === "chatgpt") result = scanChatGPTInbox(store, config);
     else if (id === "figma") result = scanFigma(store, config);
     else if (id === "browser") result = scanBrowsers(store, config);

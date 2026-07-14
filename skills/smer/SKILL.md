@@ -46,6 +46,7 @@ Use `smer projects list --json` to resolve project names when needed. Build a ch
 
 - Use FTS5 operators such as `term1 OR term2` and quoted phrases such as `"exact phrase"`.
 - Search Slack with `--source slack --kind x-slack-message`. Search an agent with `--source chatgpt|claude-code|codex|cursor --kind agent_session`; source names are filters, not FTS terms.
+- Use `--source cursor --kind x-file-edit` to connect files saved in Cursor with nearby git, shell, and agent events. These events contain paths and timestamps, never file contents.
 - Use several small searches with synonyms when the user's language may differ from event text.
 - If results are empty, broaden the date range, remove filters, inspect `smer providers --json`, and report corpus gaps rather than inventing an answer.
 - Prefer chronological event IDs for a narrative and ranked event IDs for recommendations.

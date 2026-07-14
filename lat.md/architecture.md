@@ -32,7 +32,7 @@ ChatGPT uses a private import inbox because its desktop cache is encrypted and s
 
 Figma polling reads recent-tab metadata from the desktop app's private `settings.json` and advances a per-file `editedAt` cursor. Events retain clean file/node links and timestamp metadata, but omit viewport state, session parameters, signed thumbnail URLs, and document contents. Missing or changed desktop state degrades to a warning because the schema is not a supported Figma API.
 
-Cursor creates one bounded event per completed session with all user requests, the final outcome, commands, file paths, tool counts, and failures. It excludes file contents and diff bodies. Slack uses channel allowlists and independent timestamp cursors.
+Cursor creates one bounded event per completed Agent session and one lightweight event per saved project file found in its local-history indexes. Save events retain path and timestamp metadata but never read snapshot contents or diff bodies. Slack uses channel allowlists and independent timestamp cursors.
 
 Custom providers use declarative API polling or JSONL tails where possible. Executables are the escape hatch and disable after five consecutive failures.
 

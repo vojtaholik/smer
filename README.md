@@ -26,7 +26,7 @@ smer turns logs your tools already produce into one private, structured timeline
 - SQLite WAL store with synchronized FTS5, BM25 ranking, and recency boost.
 - Strict event validation, pre-insert secret redaction, project resolution, and source-aware dedupe.
 - Shell capture with exit code and duration; zsh history and git reflog backfill.
-- Bounded Claude Code, Codex, and Cursor transcript harvesters that never slurp large session files.
+- Bounded Claude Code, Codex, and Cursor transcript harvesters, plus content-free Cursor save metadata from local history.
 - Figma desktop activity capture from recent document edit markers, with clean file/node deep links and no document contents.
 - Copy-then-read Arc, Chrome, and Chromium history harvesting with domain denylists.
 - Workspace discovery from git, package manifests, Vercel, and Wrangler metadata. `.env` bytes after `=` are discarded; only key names are retained for redaction and provider suggestions.

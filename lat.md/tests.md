@@ -10,7 +10,7 @@ Tests cover strict validation, redaction, attribution, dedupe, FTS retrieval, so
 
 Provider fixtures cover incremental, bounded, and failure-isolated ingestion across local and cloud sources.
 
-Coverage includes workspace discovery, `.env` key names, shell and git history, bounded agent logs, Cursor context, Figma edit markers, browser and Slack cursors, API pagination, JSONL tails, and executable failure shutdown.
+Coverage includes workspace discovery, `.env` key names, shell and git history, bounded agent logs, content-free Cursor save metadata, Figma edit markers, browser and Slack cursors, API pagination, JSONL tails, and executable failure shutdown.
 
 ## Import And Setup
 

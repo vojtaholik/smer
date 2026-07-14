@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import { defaultConfig, loadConfig, saveConfig } from "../src/config.ts";
 import { Store } from "../src/store.ts";
 import { ingestEvent, validateEvent } from "../src/events.ts";
@@ -277,6 +278,9 @@ describe("providers, imports, setup, and CLI", () => {
     mkdirSync(nestedLogs, { recursive: true });
     const jsonl = join(nestedLogs, "session-jsonl.jsonl");
     const plain = join(logs, "session-plain.txt");
+    const historyRoot = join(home, "history");
+    const historyIndex = join(historyRoot, "saved-file", "entries.json");
+    const editedPath = join(project, "src", "editor-context.ts");
     writeFileSync(jsonl, [
       JSON.stringify({ role: "user", message: { content: [{ type: "text", text: "Repair Cursor indexing" }] } }),
       JSON.stringify({ role: "assistant", message: { content: [
@@ -293,13 +297,19 @@ describe("providers, imports, setup, and CLI", () => {
       JSON.stringify({ type: "tool", status: "failed", error: "A recoverable fixture failure" }),
     ].join("\n"));
     writeFileSync(plain, "User:\nInvestigate the legacy transcript\n\nAssistant:\nLegacy transcript captured\n");
+    mkdirSync(dirname(historyIndex), { recursive: true });
+    writeFileSync(historyIndex, JSON.stringify({
+      version: 1,
+      resource: pathToFileURL(editedPath).href,
+      entries: [{ id: "edit-1.ts", timestamp: Date.now() - 12 * 60_000 }],
+    }));
     const old = new Date(Date.now() - 11 * 60_000);
     utimesSync(jsonl, old, old);
     utimesSync(plain, old, old);
     const store = new Store(home);
     store.upsertProject({ name: "cursor-project", path: project, domains: [], keywords: [] });
-    const result = scanCursor(store, defaultConfig(), 0, [cursorRoot]);
-    expect(result.inserted).toBe(2);
+    const result = scanCursor(store, defaultConfig(), 0, [cursorRoot], [historyRoot]);
+    expect(result.inserted).toBe(3);
     const cursorEvent = searchEvents(store, "Cursor indexing")[0];
     expect(cursorEvent?.project).toBe("cursor-project");
     expect(cursorEvent?.text).toContain("Also retain the final verification");
@@ -315,6 +325,14 @@ describe("providers, imports, setup, and CLI", () => {
     });
     expect(searchEvents(store, "transcript collector")).toHaveLength(1);
     expect(searchEvents(store, "Legacy transcript captured")).toHaveLength(1);
+    const editEvent = searchEvents(store, '"editor-context"')[0];
+    expect(editEvent).toMatchObject({ source: "cursor", kind: "x-file-edit", project: "cursor-project" });
+    expect(editEvent?.meta).toMatchObject({
+      relative_path: join("src", "editor-context.ts"),
+      extension: ".ts",
+      editor: "cursor",
+      content_captured: false,
+    });
     expect(searchEvents(store, "diffbodymarker")).toHaveLength(0);
     store.close();
   });

@@ -228,7 +228,7 @@ async function main(): Promise<void> {
         if (["all", "git"].includes(provider)) results.push(scanGit(store, config, since));
         if (["all", "claude-code"].includes(provider)) results.push(scanClaude(store, config));
         if (["all", "codex"].includes(provider)) results.push(scanCodex(store, config));
-        if (["all", "cursor"].includes(provider)) results.push(scanCursor(store, config));
+        if (["all", "cursor"].includes(provider)) results.push(scanCursor(store, config, since));
         if (["all", "figma"].includes(provider)) results.push(scanFigma(store, config, undefined, since));
         if (["all", "browser"].includes(provider)) results.push(scanBrowsers(store, config));
         if (!results.length) throw new Error(`Unknown backfill provider: ${provider}`);

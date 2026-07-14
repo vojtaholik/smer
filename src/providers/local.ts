@@ -9,9 +9,10 @@ import {
   readdirSync,
   statSync,
 } from "node:fs";
-import { basename, dirname, extname, join, sep } from "node:path";
+import { basename, dirname, extname, join, relative, sep } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import type { SmerConfig, EventEnvelope } from "../types.ts";
 import type { Store } from "../store.ts";
 import { contentHash, ingestEvent } from "../events.ts";
@@ -130,10 +131,11 @@ export function scanCodex(
 export function scanCursor(
   store: Store,
   config: SmerConfig,
-  since = Math.floor(Date.now() / 1000) - 30 * 86400,
+  since = Number(store.providerState("cursor")?.cursor || Math.floor(Date.now() / 1000) - 30 * 86400),
   roots = [join(homedir(), ".cursor", "projects")],
+  historyRoots = [join(homedir(), "Library", "Application Support", "Cursor", "User", "History")],
 ): ProviderRunResult {
-  return scanAgentLogs(
+  const transcripts = scanAgentLogs(
     store,
     config,
     "cursor",
@@ -141,6 +143,82 @@ export function scanCursor(
     isCursorTranscript,
     since,
   );
+  const edits = scanCursorHistory(store, config, since, historyRoots);
+  return {
+    provider: "cursor",
+    scanned: transcripts.scanned + edits.scanned,
+    inserted: transcripts.inserted + edits.inserted,
+    duplicates: transcripts.duplicates + edits.duplicates,
+    cursor: edits.cursor || undefined,
+    warnings: [...transcripts.warnings, ...edits.warnings],
+  };
+}
+
+export function scanCursorHistory(
+  store: Store,
+  config: SmerConfig,
+  since: number,
+  roots = [join(homedir(), "Library", "Application Support", "Cursor", "User", "History")],
+): ProviderRunResult {
+  const result = emptyResult("cursor");
+  let maxTs = since;
+  const projects = store.projects();
+  for (const root of roots) {
+    for (const indexPath of recursiveFiles(root, 2)) {
+      if (basename(indexPath) !== "entries.json") continue;
+      try {
+        const stats = statSync(indexPath);
+        if (stats.size > 1024 * 1024) {
+          result.warnings.push(`${indexPath}: skipped local-history index over 1MB`);
+          continue;
+        }
+        const parsed = JSON.parse(readFileSync(indexPath, "utf8")) as Record<string, unknown>;
+        if (typeof parsed.resource !== "string" || !Array.isArray(parsed.entries)) continue;
+        const url = new URL(parsed.resource);
+        if (url.protocol !== "file:") continue;
+        const filePath = fileURLToPath(url);
+        const project = projects.find((item) => filePath === item.path || filePath.startsWith(`${item.path}${sep}`));
+        if (!project) continue;
+        const projectRelativePath = relative(project.path, filePath);
+        if (!projectRelativePath || projectRelativePath.startsWith(`..${sep}`) || projectRelativePath === "..") continue;
+        const parts = projectRelativePath.split(sep);
+        if (parts.some((part) => config.excludedRoots.includes(part))) continue;
+
+        for (const rawEntry of parsed.entries.slice(-5000)) {
+          if (!rawEntry || typeof rawEntry !== "object") continue;
+          const entry = rawEntry as Record<string, unknown>;
+          const id = typeof entry.id === "string" ? entry.id : "";
+          const rawTimestamp = Number(entry.timestamp);
+          const ts = rawTimestamp > 10_000_000_000 ? Math.floor(rawTimestamp / 1000) : Math.floor(rawTimestamp);
+          if (!id || !Number.isFinite(ts) || ts < since || ts > Math.floor(Date.now() / 1000) + 86400) continue;
+          result.scanned += 1;
+          maxTs = Math.max(maxTs, ts);
+          const event = ingestEvent(store, config, {
+            ts,
+            source: "cursor",
+            kind: "x-file-edit",
+            project: project.name,
+            title: `Edited ${projectRelativePath}`,
+            text: `Cursor saved ${projectRelativePath}`,
+            meta: {
+              cwd: dirname(filePath),
+              path: filePath,
+              relative_path: projectRelativePath,
+              extension: extname(filePath),
+              editor: "cursor",
+              history_entry_id: id,
+              content_captured: false,
+            },
+          }, { contentHash: contentHash("cursor-file-edit", `${parsed.resource}:${id}`) });
+          countResult(result, event.duplicate);
+        }
+      } catch (error) {
+        result.warnings.push(`${indexPath}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+  result.cursor = maxTs > since ? String(maxTs) : null;
+  return result;
 }
 
 export function isCursorTranscript(path: string): boolean {
