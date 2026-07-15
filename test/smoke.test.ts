@@ -49,6 +49,16 @@ afterAll(() => {
 });
 
 describe("store and ingest", () => {
+  // @lat: [[tests#Provider Contracts#Scan Interval Migration]]
+  test("migrates generated one-minute scan intervals while preserving explicit slower values", () => {
+    const home = tempHome();
+    writeFileSync(join(home, "config.toml"), '[intervals]\ngit = 60\nbrowser = 180\n"local-tool" = 60\n');
+    const config = loadConfig(home);
+    expect(config.providerIntervals.git).toBe(120);
+    expect(config.providerIntervals.browser).toBe(180);
+    expect(config.providerIntervals["local-tool"]).toBe(60);
+  });
+
   test("creates a private WAL/FTS store", () => {
     const home = tempHome();
     const store = new Store(home);
@@ -599,15 +609,16 @@ describe("providers, imports, setup, and CLI", () => {
       store.upsertProject({ name, path: repo, domains: [], keywords: [name] });
     }
 
-    const first = scanGit(store, defaultConfig());
-    expect(first).toMatchObject({ provider: "git", scanned: 6, inserted: 6, cursor: "per-project-v1" });
-    expect(store.setting("git_scan_index")).toBe("3");
-    expect(store.db.query("SELECT COUNT(*) AS count FROM events WHERE kind = 'x-git-state'").get()).toEqual({ count: 3 });
-
-    const second = scanGit(store, defaultConfig());
-    expect(second).toMatchObject({ provider: "git", scanned: 2, inserted: 2, cursor: "per-project-v1" });
-    expect(store.setting("git_scan_index")).toBe("0");
-    expect(store.db.query("SELECT COUNT(*) AS count FROM events WHERE kind = 'x-git-state'").get()).toEqual({ count: 4 });
+    for (const count of [2, 4]) {
+      expect(scanGit(store, defaultConfig())).toMatchObject({
+        provider: "git",
+        scanned: 4,
+        inserted: 4,
+        cursor: "per-project-v1",
+      });
+      expect(store.setting("git_scan_index")).toBe(String(count === 4 ? 0 : 2));
+      expect(store.db.query("SELECT COUNT(*) AS count FROM events WHERE kind = 'x-git-state'").get()).toEqual({ count });
+    }
     store.close();
   });
 
@@ -701,7 +712,8 @@ describe("providers, imports, setup, and CLI", () => {
     expect(JSON.parse(brief.stdout.toString())).toMatchObject({ ok: true, command: "brief", result: { schemaVersion: 1 } });
   });
 
-  test("daemon makes a spooled event searchable within five seconds", async () => {
+  // @lat: [[tests#Runtime Contract#Daemon Resource Reclamation]]
+  test("daemon makes a spooled event searchable within five seconds and releases scan memory", async () => {
     const home = tempHome();
     const cli = join(projectRoot, "src", "cli.ts");
     const config = { ...defaultConfig(), devRoots: [home], enabledProviders: ["shell"] };
@@ -726,6 +738,9 @@ describe("providers, imports, setup, and CLI", () => {
       }
       expect(found).toBe(true);
       expect(performance.now() - started).toBeLessThan(5000);
+      const sampled = new Store(home);
+      expect(Number(sampled.setting("daemon_rss_bytes"))).toBeLessThan(100 * 1024 * 1024);
+      sampled.close();
     } finally {
       daemon.kill("SIGTERM");
       await daemon.exited;

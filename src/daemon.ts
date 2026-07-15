@@ -22,10 +22,15 @@ export async function runDaemon(store: Store, config: SmerConfig): Promise<never
     running = true;
     const started = performance.now();
     try {
+      let providersRan = false;
       const pausedUntil = Number(store.setting("paused_until") || 0);
       if (pausedUntil <= Math.floor(Date.now() / 1000)) {
         drainSpool(store, config);
-        await runDueProviders(store, config);
+        providersRan = (await runDueProviders(store, config)).length > 0;
+      }
+      if (providersRan) {
+        Bun.gc(false);
+        if (process.memoryUsage.rss() >= 80 * 1024 * 1024) Bun.gc(true);
       }
       store.setSetting("daemon_heartbeat", String(Math.floor(Date.now() / 1000)));
       store.setSetting("daemon_rss_bytes", String(process.memoryUsage.rss()));

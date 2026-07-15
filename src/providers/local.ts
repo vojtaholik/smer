@@ -71,7 +71,7 @@ export function scanGit(store: Store, config: SmerConfig, since?: number): Provi
   const state = store.providerState("git");
   const scanStartedAt = Math.floor(Date.now() / 1000);
   const projects = gitProjects(store);
-  const selected = since === undefined ? nextGitBatch(store, projects, 3) : projects;
+  const selected = since === undefined ? nextGitBatch(store, projects, 2) : projects;
   const legacyCursor = Number(state?.cursor);
   for (const project of selected) {
     const cursorKey = gitReflogCursorKey(project.path);

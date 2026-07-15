@@ -25,6 +25,9 @@ export const DEFAULT_PROVIDERS = [
   "browser",
 ];
 
+const CONFIG_VERSION = 2;
+const V2_SCAN_INTERVALS = ["git", "claude-code", "codex", "cursor", "figma", "assets", "browser"];
+
 export function defaultHome(): string {
   const explicit = process.env.SMER_HOME || process.env.SMEM_HOME;
   if (explicit) return resolve(explicit);
@@ -42,14 +45,14 @@ export function defaultConfig(): SmerConfig {
     enabledProviders: DEFAULT_PROVIDERS,
     providerIntervals: {
       workspace: 900,
-      git: 60,
-      "claude-code": 60,
-      codex: 60,
-      cursor: 60,
+      git: 120,
+      "claude-code": 120,
+      codex: 120,
+      cursor: 120,
       chatgpt: 600,
-      figma: 60,
-      assets: 60,
-      browser: 60,
+      figma: 120,
+      assets: 120,
+      browser: 120,
       vercel: 600,
       github: 600,
       inngest: 600,
@@ -90,6 +93,17 @@ export function loadConfig(home: string): SmerConfig {
   try {
     const parsed = Bun.TOML.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
     const intervals = (parsed.intervals || {}) as Record<string, unknown>;
+    const configVersion = typeof parsed.config_version === "number" ? parsed.config_version : 1;
+    const configuredIntervals = Object.fromEntries(
+      Object.entries(intervals)
+        .filter(([, value]) => typeof value === "number" && value >= 60)
+        .map(([key, value]) => [key, Number(value)]),
+    );
+    if (configVersion < CONFIG_VERSION) {
+      for (const id of V2_SCAN_INTERVALS) {
+        if (configuredIntervals[id] === 60) configuredIntervals[id] = 120;
+      }
+    }
     const cloud = (parsed.cloud || {}) as SmerConfig["cloud"];
     return {
       devRoots: stringArray(parsed.dev_roots, defaults.devRoots).map(expandPath),
@@ -99,11 +113,7 @@ export function loadConfig(home: string): SmerConfig {
       enabledProviders: stringArray(parsed.enabled_providers, defaults.enabledProviders),
       providerIntervals: {
         ...defaults.providerIntervals,
-        ...Object.fromEntries(
-          Object.entries(intervals)
-            .filter(([, value]) => typeof value === "number" && value >= 60)
-            .map(([key, value]) => [key, Number(value)]),
-        ),
+        ...configuredIntervals,
       },
       cloud: typeof cloud === "object" && cloud ? cloud : {},
     };
@@ -123,6 +133,7 @@ function tomlArray(values: string[]): string {
 export function saveConfig(home: string, config: SmerConfig): void {
   ensureLayout(home);
   const lines = [
+    `config_version = ${CONFIG_VERSION}`,
     `dev_roots = ${tomlArray(config.devRoots)}`,
     `browser_denylist = ${tomlArray(config.browserDenylist)}`,
     `excluded_roots = ${tomlArray(config.excludedRoots)}`,
