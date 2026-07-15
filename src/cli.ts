@@ -31,6 +31,7 @@ import { scanWorkspaces } from "./providers/workspace.ts";
 import { BUILTIN_ADAPTERS, listProviders, runProvider } from "./providers/index.ts";
 import { loadCustomProviders } from "./providers/custom.ts";
 import { storeKeychainToken } from "./providers/cloud.ts";
+import { buildBrief } from "./brief.ts";
 
 const VERSION = "0.1.0";
 const BOOLEAN_FLAGS = new Set([
@@ -161,6 +162,15 @@ async function main(): Promise<void> {
       case "stats": {
         const result = stats(store, queryOptions(args));
         respond(ctx, "stats", result, () => printStats(result));
+        break;
+      }
+      case "brief": {
+        const now = Math.floor(Date.now() / 1000);
+        const result = buildBrief(store, config, {
+          since: parseSince(stringFlag(args, "since") || "7d", new Date(now * 1000))!,
+          now,
+        });
+        respond(ctx, "brief", result, () => printBrief(result), ["Inspect evidence with smer show EVENT_ID"]);
         break;
       }
       case "show": {
@@ -604,6 +614,36 @@ function printStats(result: ReturnType<typeof stats>): void {
   console.log(`\n${result.note}`);
 }
 
+function printBrief(result: ReturnType<typeof buildBrief>): void {
+  const start = new Date(result.windows.current.since * 1000).toLocaleString();
+  const end = new Date(result.windows.current.until * 1000).toLocaleString();
+  console.log(`Brief v${result.schemaVersion} · ${start} — ${end}`);
+  console.log(`${result.totals.current} events (${result.totals.previous} in the prior equal window)`);
+
+  if (result.openLoopCandidates.length) {
+    console.log("\nOpen-loop candidates");
+    for (const item of result.openLoopCandidates) {
+      console.log(`  #${item.eventIds.join(", #")} ${item.project || "unattributed"}: ${item.title}`);
+    }
+  }
+  if (result.failureSignals.length) {
+    console.log("\nFailure signals");
+    for (const item of result.failureSignals) {
+      console.log(`  ${item.count}× ${item.project || "unattributed"}/${item.source}: ${item.title} (#${item.eventIds.join(", #")})`);
+    }
+  }
+  if (result.deltas.projects.length) {
+    console.log("\nProject deltas");
+    for (const item of result.deltas.projects) {
+      console.log(`  ${item.key}: ${item.previous} → ${item.current} (${item.status}, #${item.eventIds.join(", #")})`);
+    }
+  }
+  if (result.coverageCaveats.length) {
+    console.log("\nCoverage caveats");
+    for (const item of result.coverageCaveats) console.log(`  ${item.message}`);
+  }
+}
+
 function printEventDetail(event: EventEnvelope & { id: number }): void {
   console.log(`#${event.id} ${event.title}\n${new Date(event.ts * 1000).toLocaleString()}  ${event.source}/${event.kind}  ${event.project || "unattributed"}\n\n${event.text}\n\n${JSON.stringify(event.meta, null, 2)}`);
 }
@@ -657,6 +697,7 @@ Usage:
   smer search "FTS5 query" [--project P] [--source S] [--kind K] [--since 7d]
   smer timeline [--day YYYY-MM-DD] [--project P] [--source S] [--kind K] [--since 7d]
   smer stats [--source S] [--since 30d]
+  smer brief [--since 7d] [--json]
   smer show EVENT_ID
   smer watch [--since 5m] [--interval 1s] [--project P] [--source S] [--kind K]
   smer emit --source ID --kind KIND --title TEXT [--text TEXT] [--spool]

@@ -11,10 +11,8 @@ Use the `smer` CLI to turn captured work events into evidence-backed answers. Ne
 
 1. Confirm that `smer` is available. If a command fails, run `smer doctor --json` and explain the relevant failure.
 2. Infer the smallest useful date range and project scope from the request. Default to 7 days for discovery, today for a daily digest, and 14 days for a workflow retro.
-3. Establish breadth with one or both of:
-   - `smer timeline --since RANGE --json`
-   - `smer stats --since RANGE --json`
-4. Form hypotheses from that baseline, then run focused searches with `smer search "FTS5 QUERY" --since RANGE --json`. Add `--project PROJECT`, `--source SOURCE`, or `--kind KIND` when useful.
+3. Establish breadth with `smer brief --since RANGE --json`. Treat its anomalies and open loops as candidates, not conclusions, and note every coverage caveat.
+4. Establish chronology with `smer timeline --since RANGE --json` when the question needs it, then run focused searches with `smer search "FTS5 QUERY" --since RANGE --json`. Add `--project PROJECT`, `--source SOURCE`, or `--kind KIND` when useful.
 5. Inspect decisive evidence with `smer show EVENT_ID --json`. Do not base a strong conclusion only on a truncated search result.
 6. Synthesize the answer around the user's question. Cite substantive observed claims as `[#EVENT_ID]`, distinguish inference from observation, and state where evidence is incomplete.
 

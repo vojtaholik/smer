@@ -26,7 +26,9 @@ External emitters use [[src/spool.ts#spoolEvent]] so validated events reach disk
 
 Built-in and custom collectors share health and cursor state through [[src/providers/index.ts#runProvider]]. One provider failure never stops unrelated capture.
 
-Local collectors cover shell history, git reflogs, bounded agent transcripts, Figma edit markers, saved asset metadata, and copy-then-read Chromium history. Cloud collectors use Keychain credentials.
+Local collectors cover shell history, git reflogs and emit-on-change working-state metadata, bounded agent transcripts, Figma edit markers, saved asset metadata, and copy-then-read Chromium history. Cloud collectors use Keychain credentials.
+
+Git working-state events record only branch, dirty-file count, ahead/behind counts, and stash depth. They never retain filenames, diffs, or file contents, and unchanged state does not emit another event.
 
 ChatGPT uses a private import inbox because its desktop cache is encrypted and smer does not call a private conversation API. The daemon polls `~/.smer/imports/chatgpt` for changed official export ZIPs or `conversations.json`; Codex remains bounded local JSONL capture.
 
@@ -42,13 +44,17 @@ Custom providers use declarative API polling or JSONL tails where possible. Exec
 
 The CLI command router in [[src/cli.ts#main]] exposes source-aware search, timeline, stats, setup, provider control, imports, diagnostics, and ADR-001 JSON output.
 
+The deterministic brief in [[src/brief.ts#buildBrief]] compares equal half-open windows, proposes bounded anomaly and open-loop candidates, and carries evidence event ids plus capture-health caveats in a versioned schema.
+
 Running the binary without a command opens [[src/tui.ts#runTui]], a full-screen terminal search interface with event detail and source deep links.
 
 `smer watch` opens a live terminal feed with daemon and provider health. The conditional pulse reports non-ambient events or health failures and persists its last window to avoid duplicate notifications.
 
 ## Agent Layer
 
-Setup installs local digest, content-mining, workflow-retro, and provider-authoring prompts while keeping all analysis inside the user's chosen agent subscription.
+Setup installs local digest, content-mining, workflow-retro, and provider-authoring prompts while keeping analysis inside the user's chosen agent subscription.
+
+Analysis prompts begin with the deterministic brief and verify candidates against cited events.
 
 The bundled `smer` skill gives Codex and Claude Code one shared query workflow for evidence-backed synthesis, explicit inference, and event-id citations. A single repository-backed skill can be linked into both agents' global skill directories.
 

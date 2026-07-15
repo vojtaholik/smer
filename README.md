@@ -81,6 +81,7 @@ Run `smer watch` for a live five-minute event feed with daemon and provider heal
 smer search "query" [--project P] [--source S] [--kind K] [--since 7d] [--limit 25]
 smer timeline [--day YYYY-MM-DD] [--project P] [--source S] [--kind K] [--since 7d]
 smer stats [--source S] [--since 30d]
+smer brief [--since 7d] [--json]
 smer show EVENT_ID
 smer watch [--since 5m] [--interval 1s] [--project P] [--source S] [--kind K]
 smer emit --source ID --kind KIND --title TEXT [--text TEXT] [--spool]
@@ -108,6 +109,8 @@ Every command accepts `--home PATH` and `--json`. JSON responses use:
   "next_actions": []
 }
 ```
+
+`smer brief` is a deterministic pre-distillation packet. It compares the requested window with the prior equal window, reports bounded deltas, bursts, failure signals, outcomes, project/source counts, open-loop candidates, and capture gaps, and includes evidence event ids for drill-down.
 
 ## ChatGPT and Codex
 

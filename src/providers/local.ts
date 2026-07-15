@@ -105,8 +105,105 @@ export function scanGit(store: Store, config: SmerConfig, since?: number): Provi
       countResult(result, event.duplicate);
     }
   }
+  const workingState = scanGitWorkingState(store, config);
+  result.scanned += workingState.scanned;
+  result.inserted += workingState.inserted;
+  result.duplicates += workingState.duplicates;
+  result.warnings.push(...workingState.warnings);
   result.cursor = String(maxTs);
   return result;
+}
+
+interface GitWorkingState {
+  branch: string;
+  detached: boolean;
+  upstream: string | null;
+  dirtyFiles: number;
+  ahead: number;
+  behind: number;
+  stashCount: number;
+}
+
+// @lat: [[roadmap#Distillation Roadmap#Phase 1: Richer Capture#Git Working State]]
+export function scanGitWorkingState(store: Store, config: SmerConfig): ProviderRunResult {
+  const result = emptyResult("git");
+  for (const project of store.projects()) {
+    if (!existsSync(join(project.path, ".git"))) continue;
+    result.scanned += 1;
+    const inspected = inspectGitWorkingState(project.path);
+    if ("error" in inspected) {
+      result.warnings.push(`${project.name}: ${inspected.error}`);
+      continue;
+    }
+    const state = inspected.state;
+    const signature = JSON.stringify(state);
+    const settingKey = `git_working_state:${createHash("sha256").update(project.path).digest("hex")}`;
+    if (store.setting(settingKey) === signature) {
+      result.duplicates += 1;
+      continue;
+    }
+    const inserted = ingestEvent(store, config, {
+      ts: Math.floor(Date.now() / 1000),
+      source: "git",
+      kind: "x-git-state",
+      project: project.name,
+      title: `${project.name}: ${state.branch} · ${state.dirtyFiles ? `${state.dirtyFiles} dirty` : "clean"}`,
+      text: `Branch ${state.branch}; ${state.dirtyFiles} dirty files; ${state.ahead} ahead; ${state.behind} behind; ${state.stashCount} stashes.`,
+      meta: {
+        schema_version: 1,
+        cwd: project.path,
+        repo: project.repo || null,
+        branch: state.branch,
+        detached: state.detached,
+        upstream: state.upstream,
+        dirty_files: state.dirtyFiles,
+        ahead: state.ahead,
+        behind: state.behind,
+        stash_count: state.stashCount,
+        content_captured: false,
+      },
+    });
+    if (inserted.duplicate) result.duplicates += 1;
+    else result.inserted += 1;
+    store.setSetting(settingKey, signature);
+  }
+  return result;
+}
+
+function inspectGitWorkingState(path: string): { state: GitWorkingState } | { error: string } {
+  const status = Bun.spawnSync(["git", "-C", path, "status", "--porcelain=v2", "--branch"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (status.exitCode !== 0) return { error: status.stderr.toString().trim() || "git status failed" };
+
+  let oid = "unknown";
+  let branch = "unknown";
+  let upstream: string | null = null;
+  let ahead = 0;
+  let behind = 0;
+  let dirtyFiles = 0;
+  for (const line of status.stdout.toString().split("\n")) {
+    if (line.startsWith("# branch.oid ")) oid = line.slice("# branch.oid ".length).trim();
+    else if (line.startsWith("# branch.head ")) branch = line.slice("# branch.head ".length).trim();
+    else if (line.startsWith("# branch.upstream ")) upstream = line.slice("# branch.upstream ".length).trim() || null;
+    else if (line.startsWith("# branch.ab ")) {
+      const match = line.match(/\+(\d+)\s+-(\d+)/);
+      if (match) {
+        ahead = Number(match[1]);
+        behind = Number(match[2]);
+      }
+    } else if (line.trim()) dirtyFiles += 1;
+  }
+  const detached = branch === "(detached)" || branch === "(unknown)";
+  if (detached) branch = oid.slice(0, 12);
+
+  const stash = Bun.spawnSync(["git", "-C", path, "rev-list", "--count", "refs/stash"], {
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  const stashCount = stash.exitCode === 0 ? Number(stash.stdout.toString().trim() || 0) : 0;
+  return { state: { branch, detached, upstream, dirtyFiles, ahead, behind, stashCount } };
 }
 
 export function scanClaude(
