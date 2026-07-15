@@ -12,6 +12,10 @@ Provider fixtures cover incremental, bounded, and failure-isolated ingestion acr
 
 Coverage includes workspace discovery, `.env` key names, shell and git history, bounded agent logs, content-free Cursor save metadata, Figma edit markers, browser and Slack cursors, API pagination, JSONL tails, and executable failure shutdown.
 
+### Git Working State
+
+Git state capture emits branch and aggregate working-tree metadata on change while omitting filenames and content, and an unchanged scan produces no new corpus event.
+
 ### Local Asset Saves
 
 Image save events retain filesystem metadata and project attribution while excluding image bytes from the event corpus, and repeated scans deduplicate an unchanged file version.
@@ -25,6 +29,10 @@ Legacy database fixtures verify that a renamed binary opens `smem.db` rather tha
 ## Runtime Contract
 
 A sibling-process test starts the daemon, emits through the spool, retrieves through FTS, and requires completion within the five-second latency budget.
+
+### Brief Contract
+
+The versioned brief compares exact current and prior windows, excludes derived observations, bounds detailed output, and attaches corpus event ids to deterministic deltas, failures, outcomes, and open-loop candidates.
 
 ### Conditional Pulse
 

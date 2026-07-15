@@ -15,10 +15,11 @@ import { importChatGPT, scanChatGPTInbox } from "../src/importers.ts";
 import { setup } from "../src/setup.ts";
 import { doctor } from "../src/doctor.ts";
 import { Database } from "bun:sqlite";
-import { scanAgentLogs, scanBrowsers, scanCursor, scanGit, importZshHistory } from "../src/providers/local.ts";
+import { scanAgentLogs, scanBrowsers, scanCursor, scanGit, scanGitWorkingState, importZshHistory } from "../src/providers/local.ts";
 import { scanFigma } from "../src/providers/figma.ts";
 import { evaluatePulse, runPulse } from "../src/monitor.ts";
 import { scanAssets } from "../src/providers/assets.ts";
+import { buildBrief, briefLimits } from "../src/brief.ts";
 
 const homes: string[] = [];
 const projectRoot = join(import.meta.dir, "..");
@@ -152,6 +153,63 @@ describe("store and ingest", () => {
     expect(recovered.rejected).toHaveLength(1);
     expect(searchEvents(store, "recovered after crash")).toHaveLength(1);
     expect(existsSync(join(home, "spool", "rejected", "invalid.jsonl"))).toBe(true);
+    store.close();
+  });
+
+  // @lat: [[tests#Runtime Contract#Brief Contract]]
+  test("brief compares equal windows with bounded evidence-backed candidates", () => {
+    const home = tempHome();
+    const store = new Store(home);
+    const config = { ...defaultConfig(), enabledProviders: ["git"] };
+    const now = Math.floor(Date.now() / 1000);
+    ingestEvent(store, config, event({ ts: now - 5400, project: "alpha", title: "prior work", text: "prior work" }));
+    const firstFailure = ingestEvent(store, config, event({
+      ts: now - 900,
+      source: "vercel",
+      kind: "deploy",
+      project: "alpha",
+      title: "Deploy 101 failed",
+      text: "build failed at compile",
+      meta: { status: "failed" },
+    }));
+    const secondFailure = ingestEvent(store, config, event({
+      ts: now - 300,
+      source: "vercel",
+      kind: "deploy",
+      project: "alpha",
+      title: "Deploy 102 failed",
+      text: "build failed at compile again",
+      meta: { status: "failed" },
+    }));
+    ingestEvent(store, config, event({
+      ts: now - 100,
+      source: "smer",
+      kind: "x-observation",
+      project: "alpha",
+      title: "Derived observation",
+      text: "must not feed the next brief",
+    }));
+    store.setSetting("daemon_heartbeat", String(now));
+    store.setProviderState({ id: "git", adapter: "log-tail", enabled: true, healthy: true, lastRun: now, cursor: null, error: null });
+
+    const brief = buildBrief(store, config, { since: now - 3600, now });
+    expect(brief).toMatchObject({
+      schemaVersion: 1,
+      generatedAt: now,
+      windows: {
+        current: { since: now - 3600, until: now },
+        previous: { since: now - 7200, until: now - 3600 },
+      },
+      totals: { current: 2, previous: 1, truncated: false },
+    });
+    expect(brief.deltas.projects).toContainEqual(expect.objectContaining({ key: "alpha", current: 2, previous: 1, status: "increased" }));
+    expect(brief.failureSignals[0]).toMatchObject({ project: "alpha", source: "vercel", count: 2 });
+    expect(brief.failureSignals[0]?.eventIds).toEqual([firstFailure.id, secondFailure.id]);
+    expect(brief.outcomes.map((item) => item.id)).toEqual([secondFailure.id, firstFailure.id]);
+    expect(brief.openLoopCandidates).toContainEqual(expect.objectContaining({ reason: "unresolved_failure", eventIds: [secondFailure.id] }));
+    expect(brief.coverageCaveats).toEqual([]);
+    expect(JSON.stringify(brief).length).toBeLessThan(50_000);
+    expect(brief.projectSourceMatrix.length).toBeLessThanOrEqual(briefLimits().matrixRows);
     store.close();
   });
 });
@@ -496,6 +554,32 @@ describe("providers, imports, setup, and CLI", () => {
     store.close();
   });
 
+  // @lat: [[tests#Provider Contracts#Git Working State]]
+  test("git working state emits metadata only when the state changes", () => {
+    const home = tempHome();
+    const repo = join(home, "state-repo");
+    mkdirSync(repo, { recursive: true });
+    expect(Bun.spawnSync(["git", "init", repo], { stdout: "ignore", stderr: "pipe" }).exitCode).toBe(0);
+    writeFileSync(join(repo, "README.md"), "clean\n");
+    Bun.spawnSync(["git", "-C", repo, "add", "README.md"]);
+    expect(Bun.spawnSync(["git", "-C", repo, "-c", "user.name=smer test", "-c", "user.email=smer@example.test", "commit", "-m", "initial"], { stdout: "ignore", stderr: "pipe" }).exitCode).toBe(0);
+    const store = new Store(home);
+    store.upsertProject({ name: "state-repo", path: repo, domains: [], keywords: ["state-repo"] });
+    const config = defaultConfig();
+
+    expect(scanGitWorkingState(store, config)).toMatchObject({ scanned: 1, inserted: 1, duplicates: 0 });
+    expect(scanGitWorkingState(store, config)).toMatchObject({ scanned: 1, inserted: 0, duplicates: 1 });
+    writeFileSync(join(repo, "README.md"), "dirty\n");
+    expect(scanGitWorkingState(store, config)).toMatchObject({ scanned: 1, inserted: 1, duplicates: 0 });
+
+    const rows = store.db.query("SELECT meta FROM events WHERE kind = 'x-git-state' ORDER BY id").all() as Array<{ meta: string }>;
+    expect(rows).toHaveLength(2);
+    expect(JSON.parse(rows[0].meta)).toMatchObject({ dirty_files: 0, content_captured: false, schema_version: 1 });
+    expect(JSON.parse(rows[1].meta)).toMatchObject({ dirty_files: 1, content_captured: false, schema_version: 1 });
+    expect(rows.join(" ")).not.toContain("dirty\\n");
+    store.close();
+  });
+
   test("setup installs agent files without touching launchd or zsh when opted out", async () => {
     const home = tempHome();
     const root = join(home, "workspace");
@@ -505,6 +589,7 @@ describe("providers, imports, setup, and CLI", () => {
     expect(result.launchAgent).toBeNull();
     expect(result.shellHook.installed).toBe(false);
     expect(await Bun.file(join(home, "commands", "mine.md")).exists()).toBe(true);
+    expect(await Bun.file(join(home, "commands", "digest.md")).text()).toContain("smer brief --since 1d --json");
     expect(loadConfig(home).devRoots).toEqual([root]);
     expect(store.providerState("workspace")).toMatchObject({ adapter: "fs-scan", healthy: true });
     const health = doctor(store, loadConfig(home));
@@ -558,6 +643,9 @@ describe("providers, imports, setup, and CLI", () => {
     const payload = JSON.parse(search.stdout.toString());
     expect(payload).toMatchObject({ ok: true, command: "search" });
     expect(payload.result).toHaveLength(1);
+    const brief = Bun.spawnSync(["bun", cli, "brief", "--home", home, "--since", "7d", "--json"]);
+    expect(brief.exitCode).toBe(0);
+    expect(JSON.parse(brief.stdout.toString())).toMatchObject({ ok: true, command: "brief", result: { schemaVersion: 1 } });
   });
 
   test("daemon makes a spooled event searchable within five seconds", async () => {

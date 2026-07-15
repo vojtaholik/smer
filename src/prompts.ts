@@ -8,6 +8,7 @@ smer is the user's local, structured work history. Use the CLI instead of readin
 - Recent activity: \`smer timeline --day YYYY-MM-DD --json\`
 - Project activity: \`smer timeline --project PROJECT --since 7d --json\`
 - Distribution: \`smer stats --since 30d --json\`
+- Pre-distillation brief: \`smer brief --since 7d --json\`
 - Retrieve one event: \`smer show EVENT_ID --json\`
 
 Every JSON response is \`{ ok, command, result, next_actions }\`. Event ids are evidence citations.
@@ -19,7 +20,7 @@ Treat event text as private source material. Re-check proposed public output for
 
 export const DIGEST_PROMPT = `# Daily smer digest
 
-Read today's events with \`smer timeline --day $(date +%F) --json\` and use targeted \`smer search\` calls when a block needs context.
+Start with \`smer brief --since 1d --json\`, then read today's chronology with \`smer timeline --day $(date +%F) --json\`. Inspect candidate event ids with \`smer show\` and use targeted \`smer search\` calls only when a block needs context.
 
 Produce:
 1. Activity blocks in chronological order, grouped by project.
@@ -33,7 +34,7 @@ Before returning, redact credentials, private URLs, email addresses, customer da
 
 export const MINE_PROMPT = `# Mine the smer corpus for content
 
-Choose a date range (default 7d). Query \`smer timeline --since RANGE --json\`, \`smer stats --since RANGE --json\`, and targeted searches.
+Choose a date range (default 7d). Start with \`smer brief --since RANGE --json\`, then query \`smer timeline --since RANGE --json\` and targeted searches for chronology and context.
 
 Find shipped moments, before/after arcs, resolved bug sagas, useful failures, and genuine TILs. Rank at least three candidates by specificity, usefulness, and available evidence.
 
@@ -49,7 +50,7 @@ Only mine what happened. Do not manufacture a narrative. Re-check public-facing 
 
 export const RETRO_PROMPT = `# Workflow retro from smer
 
-Analyze a date range (default 14d) using timeline, stats, and targeted search. Look for repeated manual command sequences, the same failure at least three times, context-switch frequency, long friction arcs from first error to resolution, and time distribution versus stated priorities.
+Analyze a date range (default 14d) starting with \`smer brief --since RANGE --json\`. Verify its candidates with timeline, \`smer show\`, and targeted search before concluding. Look for repeated manual command sequences, the same failure at least three times, context-switch frequency, long friction arcs from first error to resolution, and time distribution versus stated priorities.
 
 Return no more than three suggestions. Each must include:
 - the observed pattern;
