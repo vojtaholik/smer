@@ -23,7 +23,7 @@ A per-project scan of branch, dirty file count, ahead/behind counts, and stash d
 
 Snapshot events use an `x-git-state` kind with cwd metadata so project attribution works unchanged. Emit-on-change keeps write budgets flat, and events retain counts and refs only: branch, dirty-file count, unpushed commits, behind count, and stash depth, never filenames or contents.
 
-Daemon capture advances through three repositories per minute in a durable round-robin sweep, completing a typical checkout set within about ten minutes. Per-project reflog cursors preserve activity between visits; explicit backfills still scan every repository.
+Daemon capture advances through two repositories every two minutes in a durable round-robin sweep, completing the current 25-checkout set in about 26 minutes. Per-project reflog cursors preserve activity between visits; explicit backfills still scan every repository.
 
 ### GitHub Waiting On Me
 

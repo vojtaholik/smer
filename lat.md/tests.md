@@ -18,7 +18,11 @@ Git state capture emits branch and aggregate working-tree metadata on change whi
 
 ### Bounded Git Sweep
 
-Daemon git capture scans at most three repositories per tick in a durable round-robin sweep, while explicit backfills scan every repository and per-project cursors preserve reflog coverage.
+Daemon git capture scans two repositories per two-minute tick in a durable round-robin sweep, while explicit backfills scan every repository and per-project cursors preserve reflog coverage.
+
+### Scan Interval Migration
+
+Legacy generated 60-second intervals migrate to the two-minute scan-heavy defaults, while slower explicit intervals and custom-provider cadence remain unchanged.
 
 ### Local Asset Saves
 
@@ -37,6 +41,10 @@ Source installs link every maintained command prompt to the checkout, preserve v
 ## Runtime Contract
 
 A sibling-process test starts the daemon, emits through the spool, retrieves through FTS, and requires completion within the five-second latency budget.
+
+### Daemon Resource Reclamation
+
+Each provider cycle collects transient scan allocations before sampling RSS, while spool-triggered capture remains within the five-second latency budget and the 100 MB daemon memory limit.
 
 ### Brief Contract
 
