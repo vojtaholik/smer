@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, symlinkSync, unlinkSync, writeFileSync, chmodSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { ensureLayout, loadConfig, saveConfig, writePrivateFile } from "./config.ts";
@@ -94,9 +94,95 @@ export async function setup(
   };
 }
 
-export function installAgentFiles(home: string): void {
+export interface AgentFileInstallResult {
+  mode: "linked" | "copied";
+  commands: Array<{ name: string; path: string; source: string | null }>;
+}
+
+// @lat: [[architecture#System Architecture#Agent Layer]]
+export function installAgentFiles(home: string, requestedSource: string | null | undefined = undefined): AgentFileInstallResult {
   writePrivateFile(join(home, "CLAUDE.md"), CLAUDE_MD);
-  for (const [name, prompt] of Object.entries(AGENT_COMMANDS)) writePrivateFile(join(home, "commands", name), prompt);
+  const commandsDir = join(home, "commands");
+  mkdirSync(commandsDir, { recursive: true, mode: 0o700 });
+  const sourceDir = requestedSource === null ? null : requestedSource
+    ? resolveCommandSource(requestedSource)
+    : discoverCommandSource();
+  if (requestedSource && !sourceDir) throw new Error(`Command source does not contain the bundled prompts: ${requestedSource}`);
+
+  if (sourceDir) {
+    const commands = Object.keys(AGENT_COMMANDS).map((name) => {
+      const path = join(commandsDir, name);
+      const source = join(sourceDir, name);
+      replaceWithSymlink(path, source);
+      return { name, path, source };
+    });
+    return { mode: "linked", commands };
+  }
+
+  const existingLinks = linkedCommands(commandsDir);
+  if (existingLinks) return { mode: "linked", commands: existingLinks };
+
+  const commands = Object.entries(AGENT_COMMANDS).map(([name, prompt]) => {
+    const path = join(commandsDir, name);
+    removeFile(path);
+    writePrivateFile(path, prompt);
+    return { name, path, source: null };
+  });
+  return { mode: "copied", commands };
+}
+
+function discoverCommandSource(): string | null {
+  const explicit = process.env.SMER_COMMANDS_DIR;
+  if (explicit) return resolveCommandSource(explicit);
+  const moduleSource = resolveCommandSource(join(import.meta.dir, "..", "commands"));
+  if (moduleSource) return moduleSource;
+  const manifest = join(process.cwd(), "package.json");
+  if (!existsSync(manifest)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(manifest, "utf8")) as { name?: string };
+    return parsed.name === "smer-cli" ? resolveCommandSource(join(process.cwd(), "commands")) : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveCommandSource(input: string): string | null {
+  for (const candidate of [resolve(input), resolve(input, "commands")]) {
+    if (Object.keys(AGENT_COMMANDS).every((name) => existsSync(join(candidate, name)))) return realpathSync(candidate);
+  }
+  return null;
+}
+
+function linkedCommands(commandsDir: string): AgentFileInstallResult["commands"] | null {
+  const commands: AgentFileInstallResult["commands"] = [];
+  for (const name of Object.keys(AGENT_COMMANDS)) {
+    const path = join(commandsDir, name);
+    try {
+      if (!lstatSync(path).isSymbolicLink() || !existsSync(path)) return null;
+      commands.push({ name, path, source: realpathSync(path) });
+    } catch {
+      return null;
+    }
+  }
+  return commands;
+}
+
+function replaceWithSymlink(path: string, source: string): void {
+  try {
+    if (lstatSync(path).isSymbolicLink() && existsSync(path) && realpathSync(path) === realpathSync(source)) return;
+  } catch {
+    // Missing and broken links are replaced below.
+  }
+  removeFile(path);
+  symlinkSync(source, path);
+}
+
+function removeFile(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
 }
 
 export function shellHookSnippet(): string {

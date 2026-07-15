@@ -56,6 +56,8 @@ Setup installs local digest, content-mining, workflow-retro, and provider-author
 
 Analysis prompts begin with the deterministic brief and verify candidates against cited events.
 
+Source-checkout installs link maintained command prompts into `~/.smer/commands` so updates become active immediately. Standalone binaries retain embedded copy fallback, and a valid existing link set is never replaced by fallback copies.
+
 The bundled `smer` skill gives Codex and Claude Code one shared query workflow for evidence-backed synthesis, explicit inference, and event-id citations. A single repository-backed skill can be linked into both agents' global skill directories.
 
 The bundled `add-smer-provider` skill documents adapter selection, Keychain credential handling, envelope mapping, verification, and health diagnosis.

@@ -26,6 +26,10 @@ ChatGPT conversation ids upsert across manual and inbox imports, and unchanged i
 
 Legacy database fixtures verify that a renamed binary opens `smem.db` rather than silently creating an empty `smer.db`. LaunchAgent and shell compatibility remain bounded migration behavior.
 
+### Agent Command Links
+
+Source installs link every maintained command prompt to the checkout, preserve valid links during fallback runs, and keep embedded copies synchronized for standalone binaries.
+
 ## Runtime Contract
 
 A sibling-process test starts the daemon, emits through the spool, retrieves through FTS, and requires completion within the five-second latency budget.

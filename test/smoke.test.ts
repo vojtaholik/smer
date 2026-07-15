@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -12,7 +12,7 @@ import { scanWorkspaces } from "../src/providers/workspace.ts";
 import { BUILTIN_ADAPTERS, runProvider } from "../src/providers/index.ts";
 import { pollSlack } from "../src/providers/cloud.ts";
 import { importChatGPT, scanChatGPTInbox } from "../src/importers.ts";
-import { setup } from "../src/setup.ts";
+import { installAgentFiles, setup } from "../src/setup.ts";
 import { doctor } from "../src/doctor.ts";
 import { Database } from "bun:sqlite";
 import { scanAgentLogs, scanBrowsers, scanCursor, scanGit, scanGitWorkingState, importZshHistory } from "../src/providers/local.ts";
@@ -20,6 +20,7 @@ import { scanFigma } from "../src/providers/figma.ts";
 import { evaluatePulse, runPulse } from "../src/monitor.ts";
 import { scanAssets } from "../src/providers/assets.ts";
 import { buildBrief, briefLimits } from "../src/brief.ts";
+import { AGENT_COMMANDS } from "../src/prompts.ts";
 
 const homes: string[] = [];
 const projectRoot = join(import.meta.dir, "..");
@@ -590,11 +591,33 @@ describe("providers, imports, setup, and CLI", () => {
     expect(result.shellHook.installed).toBe(false);
     expect(await Bun.file(join(home, "commands", "mine.md")).exists()).toBe(true);
     expect(await Bun.file(join(home, "commands", "digest.md")).text()).toContain("smer brief --since 1d --json");
+    expect(lstatSync(join(home, "commands", "digest.md")).isSymbolicLink()).toBe(true);
     expect(loadConfig(home).devRoots).toEqual([root]);
     expect(store.providerState("workspace")).toMatchObject({ adapter: "fs-scan", healthy: true });
     const health = doctor(store, loadConfig(home));
     expect(health.healthy).toBe(true);
     store.close();
+  });
+
+  // @lat: [[tests#Verification#Import And Setup#Agent Command Links]]
+  test("agent command installation links checkout prompts and keeps a standalone copy fallback", () => {
+    const source = join(projectRoot, "commands");
+    const linkedHome = tempHome();
+    const linked = installAgentFiles(linkedHome, source);
+    expect(linked.mode).toBe("linked");
+    for (const [name, fallback] of Object.entries(AGENT_COMMANDS)) {
+      const path = join(linkedHome, "commands", name);
+      expect(lstatSync(path).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(path)).toBe(join(source, name));
+      expect(readFileSync(join(source, name), "utf8")).toBe(fallback);
+    }
+    expect(installAgentFiles(linkedHome, null).mode).toBe("linked");
+
+    const copiedHome = tempHome();
+    const copied = installAgentFiles(copiedHome, null);
+    expect(copied.mode).toBe("copied");
+    expect(lstatSync(join(copiedHome, "commands", "digest.md")).isSymbolicLink()).toBe(false);
+    expect(readFileSync(join(copiedHome, "commands", "digest.md"), "utf8")).toBe(AGENT_COMMANDS["digest.md"]);
   });
 
   // @lat: [[tests#Runtime Contract#Conditional Pulse]]
