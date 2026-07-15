@@ -13,7 +13,7 @@ import { basename, dirname, extname, join, relative, sep } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import type { SmerConfig, EventEnvelope } from "../types.ts";
+import type { SmerConfig, EventEnvelope, ProjectRecord } from "../types.ts";
 import type { Store } from "../store.ts";
 import { contentHash, ingestEvent } from "../events.ts";
 
@@ -69,10 +69,15 @@ export function importZshHistory(
 export function scanGit(store: Store, config: SmerConfig, since?: number): ProviderRunResult {
   const result = emptyResult("git");
   const state = store.providerState("git");
-  const lowerBound = since || Number(state?.cursor || Math.floor(Date.now() / 1000) - 30 * 86400);
-  let maxTs = lowerBound;
-  for (const project of store.projects()) {
-    if (!existsSync(join(project.path, ".git"))) continue;
+  const scanStartedAt = Math.floor(Date.now() / 1000);
+  const projects = gitProjects(store);
+  const selected = since === undefined ? nextGitBatch(store, projects, 3) : projects;
+  const legacyCursor = Number(state?.cursor);
+  for (const project of selected) {
+    const cursorKey = gitReflogCursorKey(project.path);
+    const lowerBound = since ?? Number(store.setting(cursorKey) || (Number.isFinite(legacyCursor) && legacyCursor > 0
+      ? legacyCursor
+      : scanStartedAt - 30 * 86400));
     const proc = Bun.spawnSync(
       ["git", "-C", project.path, "reflog", `--since=@${lowerBound}`, "--format=%ct%x1f%H%x1f%gs"],
       { stdout: "pipe", stderr: "pipe" },
@@ -87,7 +92,6 @@ export function scanGit(store: Store, config: SmerConfig, since?: number): Provi
       const ts = Number(rawTs);
       if (!ts || !sha) continue;
       result.scanned += 1;
-      maxTs = Math.max(maxTs, ts);
       const event = ingestEvent(
         store,
         config,
@@ -104,13 +108,14 @@ export function scanGit(store: Store, config: SmerConfig, since?: number): Provi
       );
       countResult(result, event.duplicate);
     }
+    store.setSetting(cursorKey, String(Math.max(lowerBound, scanStartedAt - 1)));
   }
-  const workingState = scanGitWorkingState(store, config);
+  const workingState = scanGitWorkingState(store, config, selected);
   result.scanned += workingState.scanned;
   result.inserted += workingState.inserted;
   result.duplicates += workingState.duplicates;
   result.warnings.push(...workingState.warnings);
-  result.cursor = String(maxTs);
+  result.cursor = "per-project-v1";
   return result;
 }
 
@@ -125,10 +130,13 @@ interface GitWorkingState {
 }
 
 // @lat: [[roadmap#Distillation Roadmap#Phase 1: Richer Capture#Git Working State]]
-export function scanGitWorkingState(store: Store, config: SmerConfig): ProviderRunResult {
+export function scanGitWorkingState(
+  store: Store,
+  config: SmerConfig,
+  projects: ProjectRecord[] = gitProjects(store),
+): ProviderRunResult {
   const result = emptyResult("git");
-  for (const project of store.projects()) {
-    if (!existsSync(join(project.path, ".git"))) continue;
+  for (const project of projects) {
     result.scanned += 1;
     const inspected = inspectGitWorkingState(project.path);
     if ("error" in inspected) {
@@ -171,7 +179,7 @@ export function scanGitWorkingState(store: Store, config: SmerConfig): ProviderR
 }
 
 function inspectGitWorkingState(path: string): { state: GitWorkingState } | { error: string } {
-  const status = Bun.spawnSync(["git", "-C", path, "status", "--porcelain=v2", "--branch"], {
+  const status = Bun.spawnSync(["git", "-C", path, "status", "--porcelain=v2", "--branch", "--show-stash"], {
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -183,6 +191,7 @@ function inspectGitWorkingState(path: string): { state: GitWorkingState } | { er
   let ahead = 0;
   let behind = 0;
   let dirtyFiles = 0;
+  let stashCount = 0;
   for (const line of status.stdout.toString().split("\n")) {
     if (line.startsWith("# branch.oid ")) oid = line.slice("# branch.oid ".length).trim();
     else if (line.startsWith("# branch.head ")) branch = line.slice("# branch.head ".length).trim();
@@ -193,17 +202,32 @@ function inspectGitWorkingState(path: string): { state: GitWorkingState } | { er
         ahead = Number(match[1]);
         behind = Number(match[2]);
       }
+    } else if (line.startsWith("# stash ")) {
+      stashCount = Number(line.slice("# stash ".length).trim() || 0);
     } else if (line.trim()) dirtyFiles += 1;
   }
   const detached = branch === "(detached)" || branch === "(unknown)";
   if (detached) branch = oid.slice(0, 12);
 
-  const stash = Bun.spawnSync(["git", "-C", path, "rev-list", "--count", "refs/stash"], {
-    stdout: "pipe",
-    stderr: "ignore",
-  });
-  const stashCount = stash.exitCode === 0 ? Number(stash.stdout.toString().trim() || 0) : 0;
   return { state: { branch, detached, upstream, dirtyFiles, ahead, behind, stashCount } };
+}
+
+function gitProjects(store: Store): ProjectRecord[] {
+  return store.projects()
+    .filter((project) => existsSync(join(project.path, ".git")))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function nextGitBatch(store: Store, projects: ProjectRecord[], limit: number): ProjectRecord[] {
+  if (projects.length <= limit) return projects;
+  const start = Math.max(0, Number(store.setting("git_scan_index") || 0)) % projects.length;
+  const selected = projects.slice(start, start + limit);
+  store.setSetting("git_scan_index", String(start + selected.length >= projects.length ? 0 : start + selected.length));
+  return selected;
+}
+
+function gitReflogCursorKey(path: string): string {
+  return `git_reflog_cursor:${createHash("sha256").update(path).digest("hex")}`;
 }
 
 export function scanClaude(

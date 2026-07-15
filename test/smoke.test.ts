@@ -581,6 +581,36 @@ describe("providers, imports, setup, and CLI", () => {
     store.close();
   });
 
+  // @lat: [[tests#Provider Contracts#Bounded Git Sweep]]
+  test("daemon git scans advance through a bounded round-robin project sweep", () => {
+    const home = tempHome();
+    const store = new Store(home);
+    for (let index = 0; index < 4; index += 1) {
+      const name = `repo-${index}`;
+      const repo = join(home, name);
+      mkdirSync(repo, { recursive: true });
+      expect(Bun.spawnSync(["git", "init", repo], { stdout: "ignore", stderr: "pipe" }).exitCode).toBe(0);
+      writeFileSync(join(repo, "README.md"), `${name}\n`);
+      Bun.spawnSync(["git", "-C", repo, "add", "README.md"]);
+      expect(Bun.spawnSync([
+        "git", "-C", repo, "-c", "user.name=smer test", "-c", "user.email=smer@example.test",
+        "commit", "-m", `initial ${name}`,
+      ], { stdout: "ignore", stderr: "pipe" }).exitCode).toBe(0);
+      store.upsertProject({ name, path: repo, domains: [], keywords: [name] });
+    }
+
+    const first = scanGit(store, defaultConfig());
+    expect(first).toMatchObject({ provider: "git", scanned: 6, inserted: 6, cursor: "per-project-v1" });
+    expect(store.setting("git_scan_index")).toBe("3");
+    expect(store.db.query("SELECT COUNT(*) AS count FROM events WHERE kind = 'x-git-state'").get()).toEqual({ count: 3 });
+
+    const second = scanGit(store, defaultConfig());
+    expect(second).toMatchObject({ provider: "git", scanned: 2, inserted: 2, cursor: "per-project-v1" });
+    expect(store.setting("git_scan_index")).toBe("0");
+    expect(store.db.query("SELECT COUNT(*) AS count FROM events WHERE kind = 'x-git-state'").get()).toEqual({ count: 4 });
+    store.close();
+  });
+
   test("setup installs agent files without touching launchd or zsh when opted out", async () => {
     const home = tempHome();
     const root = join(home, "workspace");
