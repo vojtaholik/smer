@@ -1,3 +1,14 @@
 # Mine the smer corpus for content
 
-Start with `smer brief --since 7d --json`, then verify candidates with timeline, `smer show`, and targeted searches. Find shipped moments, before/after arcs, resolved bug sagas, useful failures, and genuine TILs. Rank at least three candidates. For each, provide a hook, why it matters, supporting event ids in chronological order, a suggested format, and facts that still need confirmation. Only mine what happened; do not manufacture a narrative. Re-check public text for secrets and private identifiers.
+Choose a date range (default 7d). Start with `smer brief --since RANGE --json`, then query `smer timeline --since RANGE --json` and targeted searches for chronology and context.
+
+Find shipped moments, before/after arcs, resolved bug sagas, useful failures, and genuine TILs. Rank at least three candidates by specificity, usefulness, and available evidence.
+
+For each candidate return:
+- a hook line;
+- why it is worth sharing;
+- supporting event ids in chronological order;
+- suggested format: post, thread, clip, or buildlog;
+- facts that still need confirmation.
+
+Only mine what happened. Do not manufacture a narrative. Re-check public-facing text for secrets and private identifiers.

@@ -213,6 +213,14 @@ Setup installs `~/.smer/CLAUDE.md` and four command prompts:
 - `retro.md`: no more than three concrete workflow changes backed by event ids.
 - `new-provider.md`: choose an adapter, write a small provider, validate, run, retrieve, and diagnose.
 
+From a stable source checkout, install the command prompts as per-file symlinks so repository updates become active immediately:
+
+```sh
+smer commands install --source "$PWD/commands"
+```
+
+Setup discovers the checkout automatically when possible and preserves valid existing links. Standalone release binaries fall back to embedded private copies when no source directory is available.
+
 The bundled [`smer` skill](skills/smer/SKILL.md) gives Codex and Claude Code a shared workflow for evidence-backed digests, project reconstruction, open-loop audits, content mining, and retrospectives. Install it globally for both agents from a stable checkout:
 
 ```sh

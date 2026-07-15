@@ -1,3 +1,10 @@
 # Add a smer provider
 
-Inspect `smer providers --json` and the bundled `add-smer-provider` skill. Prefer a declarative API or JSONL provider; use an executable only when mapping cannot express the source. Keep credentials in Keychain, never config or `.env`. Validate a representative envelope with `smer emit --dry-run`, run one collection pass, retrieve the result with search, and finish with `smer doctor --json`.
+1. Inspect `smer providers --json` and the examples in the smer README.
+2. Prefer a declarative `provider.toml` using api-poll or log-tail. Use an executable only when mapping cannot express the source.
+3. Store cloud credentials in macOS Keychain, never in config or source.
+4. Map every record to the strict event envelope: ts, source, kind, project, title, text, meta.
+5. Test representative data with `smer emit --dry-run --json ...`.
+6. Run `smer providers run ID --json`, then `smer doctor --json`.
+
+Keep the provider reviewable on one screen. Preserve failures and retries as signal. Do not read .env values.

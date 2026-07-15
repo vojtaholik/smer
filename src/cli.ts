@@ -335,9 +335,11 @@ async function main(): Promise<void> {
       }
       case "commands": {
         const action = args.positionals.shift() || "install";
-        if (action !== "install") throw new Error("Usage: smer commands install");
-        installAgentFiles(store.home);
-        respond(ctx, "commands install", { path: `${store.home}/commands`, installed: ["digest.md", "mine.md", "retro.md", "new-provider.md"] }, () => console.log(`agent commands installed in ${store.home}/commands`));
+        if (action !== "install") throw new Error("Usage: smer commands install [--source PATH]");
+        const result = installAgentFiles(store.home, stringFlag(args, "source"));
+        respond(ctx, "commands install", { path: `${store.home}/commands`, ...result }, () => {
+          console.log(`agent commands ${result.mode} in ${store.home}/commands`);
+        });
         break;
       }
       case "redact": {
@@ -714,6 +716,7 @@ Usage:
   smer automation pulse [enable --every 5m|disable|status]
   smer pulse [--notify]
   smer status --segment
+  smer commands install [--source PATH]
 
 Global options:
   --home PATH      Override ~/.smer (or use SMER_HOME)
