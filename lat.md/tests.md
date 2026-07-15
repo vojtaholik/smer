@@ -16,6 +16,10 @@ Coverage includes workspace discovery, `.env` key names, shell and git history, 
 
 Git state capture emits branch and aggregate working-tree metadata on change while omitting filenames and content, and an unchanged scan produces no new corpus event.
 
+### Bounded Git Sweep
+
+Daemon git capture scans at most three repositories per tick in a durable round-robin sweep, while explicit backfills scan every repository and per-project cursors preserve reflog coverage.
+
 ### Local Asset Saves
 
 Image save events retain filesystem metadata and project attribution while excluding image bytes from the event corpus, and repeated scans deduplicate an unchanged file version.

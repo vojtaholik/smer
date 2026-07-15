@@ -28,7 +28,7 @@ Built-in and custom collectors share health and cursor state through [[src/provi
 
 Local collectors cover shell history, git reflogs and emit-on-change working-state metadata, bounded agent transcripts, Figma edit markers, saved asset metadata, and copy-then-read Chromium history. Cloud collectors use Keychain credentials.
 
-Git working-state events record only branch, dirty-file count, ahead/behind counts, and stash depth. They never retain filenames, diffs, or file contents, and unchanged state does not emit another event.
+Git capture uses a durable three-repository round-robin sweep with per-project reflog cursors; explicit backfills still visit every repository. Working-state events record only branch, dirty-file count, ahead/behind counts, and stash depth. They never retain filenames, diffs, or file contents, and unchanged state does not emit another event.
 
 ChatGPT uses a private import inbox because its desktop cache is encrypted and smer does not call a private conversation API. The daemon polls `~/.smer/imports/chatgpt` for changed official export ZIPs or `conversations.json`; Codex remains bounded local JSONL capture.
 

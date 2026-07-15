@@ -23,6 +23,8 @@ A per-project scan of branch, dirty file count, ahead/behind counts, and stash d
 
 Snapshot events use an `x-git-state` kind with cwd metadata so project attribution works unchanged. Emit-on-change keeps write budgets flat, and events retain counts and refs only: branch, dirty-file count, unpushed commits, behind count, and stash depth, never filenames or contents.
 
+Daemon capture advances through three repositories per minute in a durable round-robin sweep, completing a typical checkout set within about ten minutes. Per-project reflog cursors preserve activity between visits; explicit backfills still scan every repository.
+
 ### GitHub Waiting On Me
 
 Invert the GitHub provider's view: open pull requests, reviews requested from the user, and failing checks on the user's branches, alongside the existing activity feed polled by [[src/providers/cloud.ts#pollCloudProvider]].
